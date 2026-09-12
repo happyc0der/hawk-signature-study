@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="slides-format" content="viewport">
+    <title>HAWK Digital Signature: Design, Parameters, and Security</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-bg: #0a0f1e;
+            --color-bg-deep: #050a14;
+            --color-surface: #111827;
+            --color-text: #f1f5f9;
+            --color-text-secondary: #cbd5e1;
+            --color-text-muted: #64748b;
+            --color-accent-1: #38bdf8;
+            --color-accent-2: #818cf8;
+            --color-accent-3: #34d399;
+            --color-glass-bg: rgba(255,255,255,0.05);
+            --color-glass-border: rgba(255,255,255,0.10);
+            --color-vignette: rgba(0,0,0,0.45);
+            --font-display: 'Instrument Serif', serif;
+            --font-body: 'Inter', sans-serif;
+        }
+    </style>
+    <style>
+        :root { --color-bg: #0a0f1e; --color-text: #f1f5f9; --glow-color-rgb: 56,189,248; }
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { background: var(--color-bg); margin: 0; }
+        body { font-family: 'Inter', sans-serif; color: var(--color-text); overflow: hidden; height: 100vh; width: 100vw; }
+        .deck { width: 100vw; height: 100vh; position: relative; }
+        .slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.7s ease, transform 0.7s ease; pointer-events: none; overflow: hidden; }
+        .slide.active { opacity: 1; transform: scale(1); pointer-events: all; }
+        .slide > .content { position: relative; z-index: 2; width: 100%; max-width: 1100px; padding: clamp(1.5rem, 4vw, 4rem); }
+        .nav-controls { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; z-index: 100; background: rgba(255,255,255,0.06); backdrop-filter: blur(10px); padding: 10px 24px; border-radius: 40px; border: 1px solid rgba(255,255,255,0.10); }
+        .nav-btn { width: 40px; height: 40px; border: none; background: rgba(255,255,255,0.06); color: #38bdf8; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.3s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.12); }
+        .slide-dots { display: flex; gap: 8px; }
+        .slide-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); cursor: pointer; transition: background 0.3s, transform 0.3s; }
+        .slide-dots .dot.active { background: #38bdf8; transform: scale(1.35); }
+        .slide-counter { font-size: 0.78rem; color: #64748b; min-width: 40px; text-align: center; }
+        .reveal { opacity: 0; transform: translateY(20px); }
+        .notes-panel { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(5,10,20,0.97); border-top: 1px solid rgba(56,189,248,0.25); padding: 14px 30px 20px; z-index: 200; display: none; max-height: 36vh; overflow-y: auto; }
+        .notes-panel.visible { display: block; }
+        .notes-panel h4 { color: #38bdf8; font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; margin: 0 0 8px 0; }
+        .notes-panel p { color: #94a3b8; font-size: 0.82rem; line-height: 1.65; margin: 0; }
+        .notes-toggle { position: fixed; bottom: 28px; right: 28px; z-index: 300; background: rgba(56,189,248,0.13); border: 1px solid rgba(56,189,248,0.28); color: #38bdf8; font-size: 0.72rem; letter-spacing: 0.08em; padding: 7px 14px; border-radius: 20px; cursor: pointer; backdrop-filter: blur(10px); font-family: 'Inter', sans-serif; }
+        @keyframes glow-pulse { 0%,100%{text-shadow:0 0 20px rgba(56,189,248,0.5),0 0 40px rgba(56,189,248,0.2);}50%{text-shadow:0 0 30px rgba(56,189,248,0.8),0 0 60px rgba(56,189,248,0.35);} }
+        .glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+        @keyframes float-slow { 0%{transform:translate(0,0) scale(1);}25%{transform:translate(60px,-50px) scale(1.12);}50%{transform:translate(-40px,40px) scale(0.9);}75%{transform:translate(50px,20px) scale(1.08);}100%{transform:translate(0,0) scale(1);} }
+        @keyframes float-drift { 0%{transform:translate(0,0) scale(1) rotate(0deg);}33%{transform:translate(-50px,-60px) scale(1.15) rotate(3deg);}66%{transform:translate(40px,30px) scale(0.88) rotate(-2deg);}100%{transform:translate(0,0) scale(1) rotate(0deg);} }
+        @keyframes float { 0%,100%{transform:translateY(0);}50%{transform:translateY(-14px);} }
+        .gradient-mesh { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .blob { position: absolute; border-radius: 50%; filter: blur(80px); animation: float-slow 10s ease-in-out infinite; }
+        .blob:nth-child(2) { animation: float-drift 14s ease-in-out infinite; }
+        .blob:nth-child(3) { animation: float-slow 18s ease-in-out infinite reverse; }
+        .slide::before { content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");background-repeat:repeat;background-size:256px 256px;opacity:0.03;mix-blend-mode:overlay; }
+        .slide::after { content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,var(--color-vignette) 100%); }
+        .section-label { font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: #38bdf8; margin-bottom: 0.7rem; }
+        .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 1.25rem 1.5rem; transition: transform 0.25s, box-shadow 0.25s; }
+        .glass-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(56,189,248,0.10); }
+    </style>
+</head>
+<body>
+
+<div class="mouse-spotlight" style="position:fixed;inset:0;z-index:99;pointer-events:none;"></div>
+
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#7f1d1d;color:#fee2e2;font-family:system-ui,-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:9px 16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+  <strong>Archived talk, June 2026.</strong>
+  Hawk was broken and withdrawn from NIST standardisation on 29 July 2026 &mdash; after this presentation was given.
+  The slides are kept unedited; the status claims in them are now historical.
+  <a href="https://eprint.iacr.org/2026/1593" style="color:#fecaca">ePrint 2026/1593</a>
+  <button onclick="this.parentElement.remove()" style="margin-left:12px;background:transparent;border:1px solid #fca5a5;color:#fecaca;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:12px">Dismiss</button>
+</div>
+
+<div class="deck">
+
+<!-- SLIDE 1: TITLE -->
+<div class="slide slide-1 active" data-slide="1" data-notes="Welcome everyone. This presentation covers HAWK, a post-quantum digital signature scheme — currently an active NIST Round 3 candidate as of May 2026. We will walk through HAWK's mathematical foundations, its three core algorithms (KeyGen, Sign, Verify), cryptanalysis and attack models, performance benchmarks, and a comparison to already-standardized schemes. Total runtime is approximately 20 minutes. This report was prepared by Keshav Rajput for CS-UY 3943, Post-Quantum Cryptography, Spring 2026, taught by Professor Dr. Delaram Kahrobaei at NYU Tandon.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:550px;height:550px;top:-120px;right:-100px;background:#38bdf8;opacity:0.13;"></div>
+        <div class="blob" style="width:350px;height:350px;bottom:-80px;left:-80px;background:#818cf8;opacity:0.11;"></div>
+        <div class="blob" style="width:220px;height:220px;top:42%;left:12%;background:#34d399;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div style="font-size:88px;margin-bottom:0.9rem;animation:float 3.5s ease-in-out infinite;">🦅</div>
+        <div class="section-label reveal">CS-UY 3943 &nbsp;·&nbsp; Post-Quantum Cryptography &nbsp;·&nbsp; Spring 2026</div>
+        <h1 class="font-display reveal" style="font-size:clamp(2.2rem,5vw,4rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#818cf8,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.15;margin:0.4rem 0 1rem;">HAWK Digital Signature<br>Design, Parameters &amp; Security</h1>
+        <p class="reveal" style="font-size:clamp(0.8rem,1.3vw,0.95rem);color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;">Keshav Rajput &nbsp;·&nbsp; Prof. Dr. Delaram Kahrobaei &nbsp;·&nbsp; June 2026</p>
+    </div>
+</div>
+
+<!-- SLIDE 2: AGENDA -->
+<div class="slide slide-2" data-slide="2" data-notes="Our roadmap for the next 20 minutes. We start with motivation — why post-quantum signatures are needed now. Then we cover HAWK's scheme overview, its three algorithms in detail, cryptanalysis, performance benchmarks, and finally a comparison to FALCON and Dilithium plus conclusions. Pressing N on the keyboard toggles speaker notes at any time.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:380px;height:380px;top:-80px;right:-60px;background:#38bdf8;opacity:0.07;"></div>
+        <div class="blob" style="width:260px;height:260px;bottom:-60px;left:-40px;background:#818cf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Roadmap</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.8vw,2.6rem);font-weight:700;margin-bottom:1.5rem;">Agenda</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#38bdf8,#818cf8);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">1</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Motivation &amp; Background</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">Quantum threat · NIST timeline · where HAWK fits</div></div>
+            </div>
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#38bdf8,#818cf8);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">2</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Scheme Overview</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">Hash-and-sign · rings · key and signature structure</div></div>
+            </div>
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#818cf8,#34d399);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">3</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Algorithms</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">KeyGen · Sign · Verify — inputs, outputs, flow</div></div>
+            </div>
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#818cf8,#34d399);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">4</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Security &amp; Cryptanalysis</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">omSVP · smLIP · BKZ estimates · side-channels</div></div>
+            </div>
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#34d399,#38bdf8);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">5</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Parameters &amp; Performance</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">Sizes · timings · RAM · x86 and ARM Cortex-M4</div></div>
+            </div>
+            <div class="glass-card reveal" style="display:flex;gap:0.85rem;align-items:flex-start;">
+                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#34d399,#38bdf8);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.78rem;color:#0a0f1e;flex-shrink:0;">6</div>
+                <div><div style="font-weight:600;font-size:0.92rem;">Comparison &amp; Conclusion</div><div style="font-size:0.76rem;color:#94a3b8;margin-top:3px;">HAWK vs. FALCON vs. Dilithium · open problems</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 3: SECTION DIVIDER — MOTIVATION -->
+<div class="slide slide-3" data-slide="3" data-notes="Section 1: Motivation and Background. This sets the stage — why is post-quantum cryptography urgent, and where does HAWK fit in the landscape?">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:500px;height:500px;top:-100px;left:50%;transform:translateX(-50%);background:#38bdf8;opacity:0.11;"></div>
+        <div class="blob" style="width:300px;height:300px;bottom:-60px;right:-60px;background:#34d399;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 1 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Motivation &amp;<br>Background</h2>
+    </div>
+</div>
+
+<!-- SLIDE 4: WHY PQC -->
+<div class="slide slide-4" data-slide="4" data-notes="Shor's algorithm (1994) solves integer factoring and discrete log in polynomial time on a sufficiently large quantum computer — directly breaking RSA, DSA, and ECDSA. Large-scale quantum computers do not exist yet, but 'harvest now, decrypt later' attacks make migration urgent. NIST ran its PQC competition and in 2024 standardized the first batch: CRYSTALS-Dilithium as ML-DSA, FALCON as FN-DSA, and SPHINCS+ as SLH-DSA. Seeking additional diversity, NIST opened a second call. HAWK was submitted as a Round 2 candidate and in May 2026 advanced to Round 3 — it is the only remaining lattice-based scheme in that competition.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:360px;height:360px;top:-70px;right:-70px;background:#38bdf8;opacity:0.07;"></div>
+        <div class="blob" style="width:240px;height:240px;bottom:-50px;left:-40px;background:#818cf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Motivation &amp; Background</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.7rem,3.5vw,2.5rem);font-weight:700;margin-bottom:1.2rem;">Why PQC Signatures?</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;">
+            <div class="glass-card reveal">
+                <div style="font-size:1.5rem;margin-bottom:0.45rem;">⚡</div>
+                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;">Quantum Threat to Classical Crypto</div>
+                <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">Shor's algorithm (FOCS 1994) efficiently factors integers and computes discrete logs — breaking RSA, DSA, and ECDSA on any sufficiently large quantum computer. "Harvest now, decrypt later" makes migration urgent <em>today</em>.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.5rem;margin-bottom:0.45rem;">🏛️</div>
+                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;">NIST Standardization Timeline</div>
+                <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;"><strong style="color:#f1f5f9;">2024:</strong> NIST standardized ML-DSA (Dilithium), FN-DSA (FALCON), SLH-DSA (SPHINCS+). Then opened a second call for diversity. HAWK advanced to <strong style="color:#34d399;">Round 3 — May 2026</strong> (NIST IR 8610).</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.5rem;margin-bottom:0.45rem;">🔀</div>
+                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;">Where HAWK Fits</div>
+                <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">HAWK's security rests on <strong style="color:#38bdf8;">omSVP</strong> and <strong style="color:#818cf8;">smLIP</strong> — independent of the SIS/LWE problems underlying ML-DSA and FN-DSA. It diversifies the algebraic footprint of the PQC portfolio.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.5rem;margin-bottom:0.45rem;">🔧</div>
+                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;">Design Goals</div>
+                <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;"><strong style="color:#34d399;">Speed:</strong> fast on ARM Cortex-M4. <strong style="color:#34d399;">Compactness:</strong> ≤14 KiB RAM for HAWK-512. <strong style="color:#34d399;">Constraint-friendly:</strong> zero floating-point arithmetic — viable on MCUs without an FPU.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 5: SECTION DIVIDER — SCHEME OVERVIEW -->
+<div class="slide slide-5" data-slide="5" data-notes="Section 2: Scheme Overview. We explain the high-level hash-and-sign design, the cyclotomic ring structure, and how private and public keys relate.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:480px;height:480px;top:-100px;left:50%;transform:translateX(-50%);background:#818cf8;opacity:0.12;"></div>
+        <div class="blob" style="width:280px;height:280px;bottom:-60px;left:-50px;background:#38bdf8;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 2 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#818cf8,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Scheme Overview</h2>
+    </div>
+</div>
+
+<!-- SLIDE 6: HIGH-LEVEL IDEA -->
+<div class="slide slide-6" data-slide="6" data-notes="HAWK follows the GPV hash-and-sign framework. The private key is a unimodular basis matrix B in GL_2(R_n), where f and g have small coefficients satisfying the NTRU relation fG minus gF equals 1 mod X^n+1. The public key is the Hermitian Gram matrix Q = B*B — determined by just q_00 and q_01 due to the NTRU relation, which keeps keys compact. To sign message m: hash m with SHAKE-256 twice to obtain a binary target vector h. Use the secret basis B to find a short vector w in the coset 2R_2n + Bh via discrete Gaussian sampling. After applying SYM-BREAK to eliminate sign ambiguity, output only the second component s_1 = (h_1 - w_1)/2 plus a salt. Crucially, s_0 is not transmitted — the verifier reconstructs it deterministically from the public key using 32-bit fixed-point arithmetic, cutting signature size roughly in half. Verification just checks that the Q-norm of w is below the threshold 4*sigma_verify^2 * 2n.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:350px;height:350px;top:-60px;right:-60px;background:#818cf8;opacity:0.08;"></div>
+        <div class="blob" style="width:230px;height:230px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Scheme Overview</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.7rem,3.5vw,2.5rem);font-weight:700;margin-bottom:1rem;">High-Level Idea: Hash-and-Sign over Rings</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;align-items:start;">
+            <div>
+                <div class="glass-card reveal" style="margin-bottom:0.8rem;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#38bdf8;margin-bottom:0.4rem;">🔑 Private Key (secret basis)</div>
+                    <p style="font-size:0.77rem;color:#cbd5e1;line-height:1.55;margin:0;">Unimodular matrix <em>B ∈ GL₂(Rₙ)</em>, rows <em>(f,F)</em> and <em>(g,G)</em>, satisfying <strong style="color:#34d399;">fG − gF = 1</strong>. Stored compactly as seed + parities of F,G mod 2 + hash of Q.</p>
+                </div>
+                <div class="glass-card reveal">
+                    <div style="font-weight:600;font-size:0.85rem;color:#818cf8;margin-bottom:0.4rem;">🗝️ Public Key (Gram matrix)</div>
+                    <p style="font-size:0.77rem;color:#cbd5e1;line-height:1.55;margin:0;"><em>Q = B⋆B</em>, determined entirely by <em>q₀₀</em> and <em>q₀₁</em>. HAWK-512: <strong style="color:#34d399;">1,024 bytes</strong>. HAWK-1024: 2,440 bytes.</p>
+                </div>
+            </div>
+            <div>
+                <div class="glass-card reveal">
+                    <div style="font-weight:600;font-size:0.85rem;color:#34d399;margin-bottom:0.5rem;">✍️ Signing Flow (high level)</div>
+                    <div style="font-size:0.77rem;color:#cbd5e1;line-height:1.7;">
+                        <div style="display:flex;gap:0.6rem;margin-bottom:0.35rem;"><span style="color:#38bdf8;font-weight:700;flex-shrink:0;">①</span><span>Hash <em>m</em> via SHAKE-256 twice → binary target <em>h ∈ R²ₙ</em></span></div>
+                        <div style="display:flex;gap:0.6rem;margin-bottom:0.35rem;"><span style="color:#38bdf8;font-weight:700;flex-shrink:0;">②</span><span>Use secret <em>B</em> to sample short <em>w</em> in coset <em>2R²ₙ + Bh</em></span></div>
+                        <div style="display:flex;gap:0.6rem;margin-bottom:0.35rem;"><span style="color:#38bdf8;font-weight:700;flex-shrink:0;">③</span><span>Apply SYM-BREAK; output only <em>s₁ = (h₁ − w₁)/2</em> + salt</span></div>
+                        <div style="display:flex;gap:0.6rem;margin-bottom:0.35rem;"><span style="color:#38bdf8;font-weight:700;flex-shrink:0;">④</span><span>HAWK-512 signature: <strong style="color:#34d399;">555 bytes</strong></span></div>
+                    </div>
+                </div>
+                <div class="glass-card reveal" style="margin-top:0.8rem;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#38bdf8;margin-bottom:0.3rem;">✅ Verification</div>
+                    <p style="font-size:0.77rem;color:#cbd5e1;line-height:1.55;margin:0;">Reconstruct <em>s₀</em> from public key via 32-bit fixed-point arithmetic. Check <strong>‖w‖²_Q ≤ 4σ²_verify · 2n</strong>. All public data — no timing side channels.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 7: BACKGROUND — RINGS & DISTRIBUTIONS -->
+<div class="slide slide-7" data-slide="7" data-notes="The mathematical setting is power-of-two cyclotomic rings R_n = Z[X]/(X^n+1) for n in 256, 512, 1024. Polynomial multiplication is efficient via NTT in these negacyclic rings. The Hermitian adjoint and the Q-norm defined from it are central to verification. For key generation, HAWK samples polynomial coefficients i.i.d. from the centred binomial distribution Bin(eta). This is extremely efficient — implemented by XOR-ing pairs of uniform bits — and requires no FPU. Signature generation uses a discrete Gaussian D_{2Z+c, sigma} with c in {0,1}, implemented via two fixed precomputed lookup tables with no key-dependent or message-dependent timing. The Rényi divergence of order a is used in the security proof to bridge the gap between the ideal Gaussian and the finite-precision sampler: it satisfies a data processing inequality and probability preservation bounds that allow the reduction to go through. The NTRU equation fG - gF = 1 is solved by NTRUSOLVE during key generation — this is the dominant computational cost, about 8.43 million cycles for HAWK-512 on x86.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:330px;height:330px;top:-60px;right:-60px;background:#38bdf8;opacity:0.07;"></div>
+        <div class="blob" style="width:220px;height:220px;bottom:-50px;left:-40px;background:#34d399;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Background &amp; Preliminaries</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:1rem;">Rings, Distributions &amp; NTRU</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.8rem;">
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">🔢</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">Cyclotomic Ring</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;"><em>Rₙ = ℤ[X]/(Xⁿ+1)</em>, <em>n ∈ {256, 512, 1024}</em>. Negacyclic structure enables efficient NTT-based polynomial multiplication.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">📊</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">Centred Binomial (KeyGen)</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;"><em>Bin(η)</em>: XOR pairs of uniform bits — constant-time, zero FPU. <span style="color:#34d399;">Var = η/2</span>, mean 0. Security parameter η varies per parameter set.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">🎲</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">Discrete Gaussian (Sign)</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;"><em>D_{2ℤ+c, σ}</em>, <em>c ∈ {0,1}</em>. Two fixed precomputed lookup tables — no key-dependent or message-dependent timing whatsoever.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">📐</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">Rényi Divergence</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;">Bridges ideal vs. finite-precision Gaussian samplers in the security proof. Satisfies data processing inequality &amp; probability preservation bounds.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">🧮</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">NTRU Equation</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;">KeyGen solves <em>fG − gF = 1 (mod Xⁿ+1)</em> via NTRUSOLVE. Dominant cost: ~<strong style="color:#38bdf8;">8.43×10⁶ cycles</strong> for HAWK-512 on x86 AVX2.</p>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-size:1.3rem;margin-bottom:0.4rem;">🔐</div>
+                <div style="font-weight:600;font-size:0.83rem;margin-bottom:0.35rem;">Hardness Assumptions</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.55;margin:0;"><strong style="color:#38bdf8;">omSVP</strong> — forgery resistance. <strong style="color:#818cf8;">smLIP</strong> — key recovery resistance. Both independent of SIS/LWE.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 8: SECTION DIVIDER — ALGORITHMS -->
+<div class="slide slide-8" data-slide="8" data-notes="Section 3: Algorithms. We walk through HAWK's three procedures in full detail — KeyGen, Sign, and Verify — with attention to the design choices that make HAWK both efficient and secure.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:480px;height:480px;top:-100px;left:50%;transform:translateX(-50%);background:#34d399;opacity:0.10;"></div>
+        <div class="blob" style="width:260px;height:260px;bottom:-60px;right:-50px;background:#818cf8;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 3 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#34d399,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Algorithms</h2>
+    </div>
+</div>
+
+<!-- SLIDE 9: KEYGEN / SIGN / VERIFY -->
+<div class="slide slide-9" data-slide="9" data-notes="HAWK-KEYGEN takes security parameters n and eta. It samples a random seed, derives f and g coefficient-by-coefficient from Bin(eta), checks conditions (odd parity, not-too-small norm), runs NTRUSOLVE to find F and G satisfying fG-gF=1, reduces to keep F and G small, builds B and Q = B*B, encodes, and outputs sk = (seed, F mod 2, G mod 2, h_pub) and pk = Q. HAWK-SIGN: recompute f,g from seed; compute M = SHAKE-256(m || h_pub) then h = SHAKE-256(M || salt) for uniform random salt; compute target coset t = Bh mod 2; sample discrete Gaussian x over 2Z^{2n}+t; compute w = B^{-1}x; check w satisfies norm bound; apply SYM-BREAK (flip sign if needed); compress s_1 = (h_1 - w_1)/2 and output (salt, s_1). The restart probability is about 1 in 200,000 for HAWK-512 — essentially deterministic throughput. HAWK-VERIFY: recompute hashes; reconstruct w_1 = h_1 - 2*s_1; check SYM-BREAK; reconstruct s_0 using the public key formula with 32-bit fixed-point arithmetic; compute w_0 and check the Q-norm bound. No secret data accessed after key decoding — fully timing-safe.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:360px;height:360px;top:-70px;right:-70px;background:#34d399;opacity:0.07;"></div>
+        <div class="blob" style="width:240px;height:240px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Algorithms</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.9rem;">KeyGen &nbsp;·&nbsp; Sign &nbsp;·&nbsp; Verify</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.85rem;">
+            <div class="glass-card reveal" style="border-top:2px solid #38bdf8;">
+                <div style="font-weight:700;font-size:0.86rem;color:#38bdf8;margin-bottom:0.55rem;">🔑 HAWK-KEYGEN</div>
+                <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.65;">
+                    <div style="margin-bottom:0.28rem;">① Sample random <em>kgseed</em></div>
+                    <div style="margin-bottom:0.28rem;">② Derive <em>f, g ∼ Bin(η)</em> deterministically</div>
+                    <div style="margin-bottom:0.28rem;">③ NTRUSOLVE → find <em>F, G</em></div>
+                    <div style="margin-bottom:0.28rem;">④ Reduce <em>F, G</em>; build <em>B</em>; compute <em>Q = B⋆B</em></div>
+                    <div style="margin-bottom:0.28rem;">⑤ <em>sk</em> = (seed, F mod 2, G mod 2, h_pub)</div>
+                    <div>⑥ <em>pk</em> = Q — HAWK-512: <strong style="color:#34d399;">1,024 B</strong></div>
+                </div>
+            </div>
+            <div class="glass-card reveal" style="border-top:2px solid #818cf8;">
+                <div style="font-weight:700;font-size:0.86rem;color:#818cf8;margin-bottom:0.55rem;">✍️ HAWK-SIGN</div>
+                <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.65;">
+                    <div style="margin-bottom:0.28rem;">① Regen <em>f, g</em> from seed</div>
+                    <div style="margin-bottom:0.28rem;">② <em>M</em> = SHAKE-256(<em>m</em> ‖ h_pub); random salt</div>
+                    <div style="margin-bottom:0.28rem;">③ <em>h</em> = SHAKE-256(<em>M</em> ‖ salt) ∈ R²ₙ</div>
+                    <div style="margin-bottom:0.28rem;">④ Sample <em>x ∼ D_{2ℤ²ⁿ+t, σ}</em></div>
+                    <div style="margin-bottom:0.28rem;">⑤ <em>w</em> = B⁻¹x; apply SYM-BREAK</div>
+                    <div>⑥ Output <em>s₁</em> only — <strong style="color:#34d399;">555 B</strong> (HAWK-512)</div>
+                </div>
+            </div>
+            <div class="glass-card reveal" style="border-top:2px solid #34d399;">
+                <div style="font-weight:700;font-size:0.86rem;color:#34d399;margin-bottom:0.55rem;">✅ HAWK-VERIFY</div>
+                <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.65;">
+                    <div style="margin-bottom:0.28rem;">① Recompute <em>h</em> as in Sign</div>
+                    <div style="margin-bottom:0.28rem;">② <em>w₁</em> = <em>h₁</em> − 2<em>s₁</em>; check SYM-BREAK</div>
+                    <div style="margin-bottom:0.28rem;">③ Reconstruct <em>s₀</em> via 32-bit fixed-point</div>
+                    <div style="margin-bottom:0.28rem;">④ <em>w₀</em> = <em>h₀</em> − 2<em>s₀</em>; form <em>w</em></div>
+                    <div style="margin-bottom:0.28rem;">⑤ Check <strong>‖w‖²_Q ≤ 4σ²_v · 2n</strong></div>
+                    <div>⑥ All public data — <strong style="color:#34d399;">no timing channels</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="glass-card reveal" style="margin-top:0.75rem;padding:0.65rem 1rem;">
+            <p style="font-size:0.74rem;color:#94a3b8;margin:0;line-height:1.55;">🔁 <strong style="color:#f1f5f9;">Restart probability:</strong> ≈ 1/200,000 (HAWK-512), ≈ 1/400,000 (HAWK-1024) — essentially deterministic throughput. Fixed Gaussian tables are load-bearing for the Rényi divergence security argument.</p>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 10: SECTION DIVIDER — SECURITY -->
+<div class="slide slide-10" data-slide="10" data-notes="Section 4: Security and Cryptanalysis. Two attack targets, BKZ estimates, and side-channel considerations.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:500px;height:500px;top:-100px;left:50%;transform:translateX(-50%);background:#f97316;opacity:0.09;"></div>
+        <div class="blob" style="width:280px;height:280px;bottom:-60px;left:-50px;background:#818cf8;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 4 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#f97316,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Security &amp;<br>Cryptanalysis</h2>
+    </div>
+</div>
+
+<!-- SLIDE 11: SECURITY ASSUMPTIONS & ATTACKS -->
+<div class="slide slide-11" data-slide="11" data-notes="HAWK targets SUF-CMA security — stronger than EUF-CMA, which is important to prevent replay and double-spend attacks. There are two distinct attack targets. First, forgery: an adversary with signing oracle access tries to produce a valid message-signature pair for a message not queried, or a new signature for a queried message. Forgery security reduces to omSVP — the one-more approximate SVP — in the quantum random oracle model. An adversary given polynomially many approximate shortest vectors in a lattice must find one more such vector it was not given. The BKZ dimension for HAWK-512 is 2n = 1024. Second, key recovery: given Q = B*B, find B. This is exactly rank-2 smLIP over a CM-field. Recent 2024-2025 work established polynomial-time classical algorithms for smLIP over totally real fields, but the CM-field case — which is exactly what HAWK uses — remains open. The quaternionic principal ideal problem required to extend to CM-fields is not known to be efficiently solvable. BKZ core-SVP estimates: HAWK-512 achieves approximately 128 bits best case and 110 bits worst case (accounting for known BKZ speedups) for both forgery and key recovery. HAWK-1024 achieves 256 and 220 bits respectively. HAWK-256 is a challenge set — not for deployment. Side channels: the Gaussian sampler is isochronous by design. A 2024 paper by Gärtner and Russon demonstrated power-analysis attacks and proposed countermeasures. Provable masking of the Gaussian sampler remains an open problem.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:340px;height:340px;top:-60px;right:-60px;background:#f97316;opacity:0.07;"></div>
+        <div class="blob" style="width:230px;height:230px;bottom:-50px;left:-40px;background:#818cf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Security &amp; Cryptanalysis</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.9rem;">Security Assumptions &amp; Attack Models</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;">
+            <div>
+                <div class="glass-card reveal" style="margin-bottom:0.75rem;border-left:3px solid #38bdf8;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#38bdf8;margin-bottom:0.35rem;">omSVP — Forgery Resistance</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">One-more approx. SVP: given poly-many short vectors, find one more. SUF-CMA reduces to omSVP in the <strong style="color:#f1f5f9;">qROM</strong>. Parameters calibrated via independent BKZ experiments — not from the reduction alone (a known methodological gap).</p>
+                </div>
+                <div class="glass-card reveal" style="border-left:3px solid #818cf8;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#818cf8;margin-bottom:0.35rem;">smLIP — Key Recovery Resistance</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">Recovering <em>B</em> from <em>Q</em> = rank-2 smLIP over a CM-field. Poly-time algorithm found for totally real fields (2024), but <strong style="color:#f1f5f9;">CM-field case remains open</strong> — confirmed by 4 major papers in 2024–25.</p>
+                </div>
+            </div>
+            <div>
+                <div class="glass-card reveal" style="margin-bottom:0.75rem;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#34d399;margin-bottom:0.5rem;">BKZ Core-SVP Estimates</div>
+                    <div style="font-size:0.74rem;">
+                        <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:4px;color:#64748b;margin-bottom:5px;font-size:0.68rem;">
+                            <span>Param Set</span><span>Forgery (B/W)</span><span>Key Rec. (B/W)</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                            <span style="color:#f97316;font-size:0.73rem;">HAWK-256 ⚠️</span><span style="font-size:0.73rem;">~64 / ~55</span><span style="font-size:0.73rem;">~64 / ~55</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                            <span style="color:#34d399;font-size:0.73rem;">HAWK-512 ✓</span><span style="font-size:0.73rem;color:#34d399;">~128 / ~110</span><span style="font-size:0.73rem;color:#34d399;">~128 / ~110</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                            <span style="color:#38bdf8;font-size:0.73rem;">HAWK-1024 ✓</span><span style="font-size:0.73rem;color:#38bdf8;">~256 / ~220</span><span style="font-size:0.73rem;color:#38bdf8;">~256 / ~220</span>
+                        </div>
+                        <p style="font-size:0.68rem;color:#64748b;margin:5px 0 0;">B = best (optimistic), W = worst (BKZ speedups). HAWK-256 is a challenge set only.</p>
+                    </div>
+                </div>
+                <div class="glass-card reveal" style="border-left:3px solid #f97316;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#f97316;margin-bottom:0.3rem;">⚡ Side-Channel Notes</div>
+                    <p style="font-size:0.75rem;color:#94a3b8;line-height:1.55;margin:0;">Fixed lookup tables → isochronous execution. 2024 power-analysis attack on reference impl.; countermeasures proposed. <strong style="color:#f1f5f9;">Provable Gaussian sampler masking remains open.</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 12: SECTION DIVIDER — PARAMETERS -->
+<div class="slide slide-12" data-slide="12" data-notes="Section 5: Parameters and Performance. Concrete numbers — key and signature sizes, clock cycle counts, and RAM requirements across all three parameter sets on x86 and ARM Cortex-M4.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:480px;height:480px;top:-100px;left:50%;transform:translateX(-50%);background:#38bdf8;opacity:0.10;"></div>
+        <div class="blob" style="width:260px;height:260px;bottom:-60px;right:-50px;background:#34d399;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 5 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Parameters &amp;<br>Performance</h2>
+    </div>
+</div>
+
+<!-- SLIDE 13: SIZES & TIMINGS -->
+<div class="slide slide-13" data-slide="13" data-notes="This slide contains all the performance data from the official HAWK v1.1 specification. HAWK-512 targets NIST Security Level I (128-bit classical security). Its public key is 1,024 bytes and signature is 555 bytes — notably compact. On x86 with AVX2 instructions, key generation takes 8.43 million cycles, signing 85,400 cycles, and verification only 148,000 cycles. On ARM Cortex-M4, signing takes 2.80 million cycles and verification 1.42 million cycles — highly competitive on embedded hardware. HAWK-1024 targets NIST Level V (256-bit). Public key 2,440 bytes, signature 1,221 bytes. Critically, HAWK-512 uses at most 14,336 bytes — 14 KiB — of RAM for any operation, fitting within the 16 KiB SRAM of the NXP LPC800, STM32F0, and Infineon XMC1000 families. If keys are generated externally and hard-coded, signing and verification for HAWK-1024 require only 7 KiB and 11 KiB respectively. The absence of floating-point arithmetic is a significant advantage over FALCON, which requires a double-precision FPU.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:350px;height:350px;top:-60px;right:-60px;background:#38bdf8;opacity:0.07;"></div>
+        <div class="blob" style="width:230px;height:230px;bottom:-50px;left:-40px;background:#34d399;opacity:0.05;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Parameters &amp; Performance</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.85rem;">Sizes &amp; Timings</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;">
+            <div class="glass-card reveal">
+                <div style="font-weight:600;font-size:0.83rem;color:#38bdf8;margin-bottom:0.6rem;">📦 Key &amp; Signature Sizes (bytes)</div>
+                <div style="font-size:0.74rem;">
+                    <div style="display:grid;grid-template-columns:1.2fr 0.8fr 0.8fr 0.8fr;gap:4px;color:#64748b;margin-bottom:5px;font-size:0.68rem;">
+                        <span>Param</span><span style="text-align:right;">PK</span><span style="text-align:right;">Sig</span><span style="text-align:right;">SK</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1.2fr 0.8fr 0.8fr 0.8fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span style="color:#f97316;">HAWK-256</span><span style="text-align:right;">450</span><span style="text-align:right;">249</span><span style="text-align:right;">96</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1.2fr 0.8fr 0.8fr 0.8fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span style="color:#34d399;font-weight:600;">HAWK-512</span><span style="text-align:right;color:#34d399;font-weight:600;">1,024</span><span style="text-align:right;color:#34d399;font-weight:600;">555</span><span style="text-align:right;">184</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1.2fr 0.8fr 0.8fr 0.8fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span style="color:#38bdf8;">HAWK-1024</span><span style="text-align:right;">2,440</span><span style="text-align:right;">1,221</span><span style="text-align:right;">360</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-weight:600;font-size:0.83rem;color:#818cf8;margin-bottom:0.6rem;">⚡ Speed — x86 AVX2 (cycles)</div>
+                <div style="font-size:0.74rem;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;color:#64748b;margin-bottom:5px;font-size:0.68rem;">
+                        <span>Operation</span><span style="text-align:right;">HAWK-512</span><span style="text-align:right;">HAWK-1024</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>KeyGen</span><span style="text-align:right;color:#f97316;">8.43 M</span><span style="text-align:right;color:#f97316;">43.7 M</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Sign</span><span style="text-align:right;color:#34d399;">85.4 K</span><span style="text-align:right;color:#34d399;">181 K</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Verify</span><span style="text-align:right;color:#38bdf8;">148 K</span><span style="text-align:right;color:#38bdf8;">303 K</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-weight:600;font-size:0.83rem;color:#34d399;margin-bottom:0.55rem;">🔋 RAM — HAWK-512 (bytes)</div>
+                <div style="font-size:0.74rem;line-height:1.7;">
+                    <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>KeyGen</span><span style="color:#34d399;font-weight:600;">14,336 B (14 KiB)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Sign (compact)</span><span>4,096 B</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Verify</span><span>6,144 B</span>
+                    </div>
+                    <p style="font-size:0.68rem;color:#64748b;margin:5px 0 0;">Fits NXP LPC800, STM32F0, Infineon XMC1000 (16 KiB SRAM).</p>
+                </div>
+            </div>
+            <div class="glass-card reveal">
+                <div style="font-weight:600;font-size:0.83rem;color:#f97316;margin-bottom:0.55rem;">📱 ARM Cortex-M4 (cycles)</div>
+                <div style="font-size:0.74rem;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;color:#64748b;margin-bottom:5px;font-size:0.68rem;">
+                        <span>Operation</span><span style="text-align:right;">HAWK-512</span><span style="text-align:right;">HAWK-1024</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>KeyGen</span><span style="text-align:right;">52.3 M</span><span style="text-align:right;">226 M</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Sign</span><span style="text-align:right;color:#34d399;">2.80 M</span><span style="text-align:right;">—</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span>Verify</span><span style="text-align:right;color:#38bdf8;">1.42 M</span><span style="text-align:right;color:#38bdf8;">3.01 M</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 14: SECTION DIVIDER — COMPARISON -->
+<div class="slide slide-14" data-slide="14" data-notes="Section 6: Comparison and Conclusion. We compare HAWK to FALCON and Dilithium, summarize key takeaways, and identify the open problems that determine HAWK's future.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:500px;height:500px;top:-100px;left:50%;transform:translateX(-50%);background:#818cf8;opacity:0.11;"></div>
+        <div class="blob" style="width:270px;height:270px;bottom:-60px;right:-50px;background:#38bdf8;opacity:0.08;"></div>
+    </div>
+    <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div class="section-label reveal">Section 6 of 6</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;background:linear-gradient(135deg,#818cf8,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2;">Comparison &amp;<br>Conclusion</h2>
+    </div>
+</div>
+
+<!-- SLIDE 15: HAWK vs FALCON vs DILITHIUM -->
+<div class="slide slide-15" data-slide="15" data-notes="Comparing HAWK-512, FALCON-512, and ML-DSA Level 2 (Dilithium), all targeting approximately 128-bit security. Public keys: HAWK 1,024 bytes, FALCON 897 bytes, Dilithium 1,312 bytes. Signatures: HAWK 555 bytes — smaller than FALCON's 666 bytes and far smaller than Dilithium's 2,420 bytes. RAM for signing: HAWK needs only 4 KiB (compact mode), FALCON approximately 20 KiB due to its floating-point tree, Dilithium about 8 KiB. The critical hardware difference: FALCON's Gaussian sampler requires a double-precision FPU, making it unsuitable for ARM Cortex-M0 and M0+ class microcontrollers. HAWK uses only 32-bit integer arithmetic — no FPU needed. Security diversity: HAWK's assumptions (omSVP and smLIP) are completely independent of SIS/LWE. A mathematical breakthrough against structured lattices solving SIS/LWE would not automatically break HAWK. Tradeoffs: HAWK is not yet standardized, has no FIPS designation, and its assumptions carry more uncertainty than SIS/LWE which have been studied since the 1990s. Organizations in regulated environments should use ML-DSA or FN-DSA today and treat HAWK as a future cryptographic agility candidate.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:350px;height:350px;top:-60px;right:-60px;background:#818cf8;opacity:0.07;"></div>
+        <div class="blob" style="width:230px;height:230px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Comparison</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.85rem;">HAWK vs. FALCON vs. Dilithium (≈ NIST Level I)</h2>
+        <div class="glass-card reveal" style="margin-bottom:0.75rem;">
+            <div style="display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;gap:5px;font-size:0.74rem;">
+                <div style="color:#64748b;font-size:0.67rem;font-weight:600;padding-bottom:6px;">Feature</div>
+                <div style="color:#38bdf8;font-weight:700;font-size:0.76rem;padding-bottom:6px;">HAWK-512</div>
+                <div style="color:#818cf8;font-weight:700;font-size:0.76rem;padding-bottom:6px;">FALCON-512</div>
+                <div style="color:#f97316;font-weight:700;font-size:0.76rem;padding-bottom:6px;">ML-DSA L2</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">Public Key</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">1,024 B</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">897 B</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">1,312 B</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">Signature</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;font-weight:600;">555 B ✓</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">666 B</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#f97316;">2,420 B</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">FPU Required?</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">No ✓</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#f97316;">Yes ✗</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">No ✓</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">Security Basis</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#38bdf8;">omSVP/smLIP</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">SIS (NTRU)</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">SIS/LWE</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">RAM (sign)</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">4 KiB ✓</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#f97316;">~20 KiB</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;">~8 KiB</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#94a3b8;">Status</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#f97316;">Round 3 candidate</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">FIPS (FN-DSA)</div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding:4px 0;color:#34d399;">FIPS (ML-DSA)</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            <div class="glass-card reveal" style="border-left:3px solid #34d399;">
+                <div style="font-weight:600;font-size:0.8rem;color:#34d399;margin-bottom:0.3rem;">✅ HAWK Advantages</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.5;margin:0;">No FPU; lowest RAM for signing; cryptographic diversity (omSVP/smLIP ≠ SIS/LWE); SUF-CMA in qROM; ideal for IoT and embedded MCUs without FPU.</p>
+            </div>
+            <div class="glass-card reveal" style="border-left:3px solid #f97316;">
+                <div style="font-weight:600;font-size:0.8rem;color:#f97316;margin-bottom:0.3rem;">⚠️ HAWK Tradeoffs</div>
+                <p style="font-size:0.74rem;color:#94a3b8;line-height:1.5;margin:0;">No FIPS designation yet; omSVP/smLIP are newer and have less accumulated scrutiny; Gaussian sampler masking unsolved; use ML-DSA/FN-DSA now for regulated environments.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 16: STANDARDIZATION STATUS -->
+<div class="slide slide-16" data-slide="16" data-notes="As of June 2026, HAWK is an active NIST Round 3 candidate. In May 2026, NIST published NIST IR 8610 announcing that 9 of 14 second-round candidates advanced to the third round — HAWK is among them. HAWK is notably the only lattice-based scheme in this competition — all other advanced lattice-based signatures, FALCON as FN-DSA and Dilithium as ML-DSA, have already been standardized from the main PQC process. Revised specifications are due by August 14, 2026, and the third round is expected to last approximately two years before further standardization decisions. NIST simultaneously encouraged additional analysis of HAWK's security assumptions when advancing it to Round 3. Regarding practical deployment: organizations in regulated environments (U.S. federal, finance, healthcare) should deploy ML-DSA or FN-DSA now. Treat HAWK as a candidate for future cryptographic agility. For embedded firmware signing and IoT with constrained hardware, HAWK is uniquely attractive if and when it is standardized. The reference Python and C implementations are publicly available at hawk-sign.info. Regarding quantum resistance: HAWK's security does not rely on problems solvable by Shor's algorithm. No quantum speedup analogous to Shor's is known for BKZ on these lattices.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:370px;height:370px;top:-70px;right:-60px;background:#38bdf8;opacity:0.08;"></div>
+        <div class="blob" style="width:250px;height:250px;bottom:-50px;left:-40px;background:#818cf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Current Relevance &amp; Practical Status</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.9rem;">Standardization Status &amp; Deployment Guidance</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;align-items:start;">
+            <div>
+                <div class="glass-card reveal" style="margin-bottom:0.75rem;border-left:3px solid #38bdf8;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#38bdf8;margin-bottom:0.35rem;">📅 NIST Round 3 — May 2026</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">9 of 14 candidates advanced (NIST IR 8610). HAWK is the <strong style="color:#f1f5f9;">only lattice-based scheme remaining</strong>. Revised specs due <strong style="color:#38bdf8;">August 14, 2026</strong>. Round 3 ≈ 2 more years.</p>
+                </div>
+                <div class="glass-card reveal" style="border-left:3px solid #818cf8;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#818cf8;margin-bottom:0.35rem;">🎯 Deployment Today</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">Regulated environments: use <strong style="color:#f1f5f9;">ML-DSA or FN-DSA now</strong>. Treat HAWK as a future cryptographic agility candidate. Implementation: <strong style="color:#38bdf8;">hawk-sign.info</strong> (Python + C).</p>
+                </div>
+            </div>
+            <div>
+                <div class="glass-card reveal" style="margin-bottom:0.75rem;border-left:3px solid #34d399;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#34d399;margin-bottom:0.35rem;">⚙️ Hardware Suitability</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">HAWK-512: ≤14 KiB RAM, floating-point free, &lt;0.1 ms on desktop. Uniquely attractive for IoT and MCUs without FPU — niche currently unserved by existing FIPS standards.</p>
+                </div>
+                <div class="glass-card reveal" style="border-left:3px solid #f97316;">
+                    <div style="font-weight:600;font-size:0.85rem;color:#f97316;margin-bottom:0.35rem;">🔬 Quantum Resistance</div>
+                    <p style="font-size:0.76rem;color:#94a3b8;line-height:1.55;margin:0;">Security does not rely on factoring or discrete log — immune to Shor's algorithm. No known quantum speedup comparable to Shor's for BKZ on these lattice problems.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 17: CONCLUSION -->
+<div class="slide slide-17" data-slide="17" data-notes="To summarize: HAWK is a compelling post-quantum signature candidate occupying a distinct niche. Its hash-and-sign design over cyclotomic rings delivers compact keys and signatures, zero floating-point arithmetic, and fits in 14 KiB RAM — making it uniquely suited for constrained IoT and embedded hardware that FALCON cannot serve. The primary open question is the long-term hardness of smLIP over CM-fields. Active progress in 2024-2025 — four major papers — has clarified the problem without resolving it. The omSVP assumption relies on BKZ experiments rather than a tight reduction — a methodological gap the authors explicitly acknowledge. Provable masking of the Gaussian sampler against power-analysis attacks is the remaining implementation challenge. HAWK-256 provides an accessible cryptanalytic challenge target. If smLIP over CM-fields withstands scrutiny through Round 3, HAWK is well-positioned for standardization and could fill a real, currently unserved gap for embedded systems.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:360px;height:360px;top:-70px;right:-60px;background:#818cf8;opacity:0.08;"></div>
+        <div class="blob" style="width:240px;height:240px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.06;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Conclusion</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.9rem;">Key Takeaways &amp; Open Problems</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;align-items:start;">
+            <div>
+                <div style="font-weight:600;font-size:0.78rem;color:#34d399;margin-bottom:0.55rem;text-transform:uppercase;letter-spacing:0.1em;">Key Takeaways</div>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;">
+                        <span style="font-size:1rem;flex-shrink:0;">🦅</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;">HAWK provides <strong style="color:#38bdf8;">cryptographic diversity</strong> — omSVP &amp; smLIP independent of SIS/LWE; algebraic footprint diversification for the PQC portfolio.</p>
+                    </div>
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;">
+                        <span style="font-size:1rem;flex-shrink:0;">⚙️</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;"><strong style="color:#34d399;">Hardware-friendly:</strong> zero FPU, ≤14 KiB RAM, isochronous execution. Ideal for IoT/embedded MCUs — fills a niche FALCON cannot.</p>
+                    </div>
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;">
+                        <span style="font-size:1rem;flex-shrink:0;">🏅</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;">Proves <strong style="color:#818cf8;">SUF-CMA in the qROM</strong> — stronger than EUF-CMA, protecting against replay and double-spend attacks in real protocols.</p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div style="font-weight:600;font-size:0.78rem;color:#f97316;margin-bottom:0.55rem;text-transform:uppercase;letter-spacing:0.1em;">Open Problems</div>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;border-left:2px solid #f97316;">
+                        <span style="font-size:1rem;flex-shrink:0;">❓</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;"><strong style="color:#f97316;">smLIP over CM-fields</strong> — 4 major papers in 2024–25; CM case still open but actively studied. Outcome determines HAWK's long-term viability.</p>
+                    </div>
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;border-left:2px solid #f97316;">
+                        <span style="font-size:1rem;flex-shrink:0;">⚡</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;"><strong style="color:#f97316;">Provable Gaussian sampler masking</strong> against power-analysis attacks — demonstrated attacks exist; provable defense remains unsolved.</p>
+                    </div>
+                    <div class="glass-card reveal" style="padding:0.7rem 0.9rem;display:flex;gap:0.7rem;align-items:flex-start;border-left:2px solid #f97316;">
+                        <span style="font-size:1rem;flex-shrink:0;">🔬</span>
+                        <p style="font-size:0.76rem;color:#cbd5e1;line-height:1.5;margin:0;"><strong style="color:#f97316;">HAWK-256 challenge set</strong> — breaking it would constitute significant scientific progress; accessible cryptanalytic target for the community.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLIDE 18: REFERENCES -->
+<div class="slide slide-18" data-slide="18" data-notes="Full references are in the manuscript. The key sources: [1] the official HAWK v1.1 Round 2 specification by Bos et al., February 2025; [2] Shor's 1994 FOCS paper; [3] NIST PQC standardization page; [4] GPV trapdoors paper (Gentry, Peikert, Vaikuntanathan, STOC 2008); [5] the ASIACRYPT 2022 paper by Ducas and van Woerden that introduced HAWK; [6,7] Prest-Pornin efficient NTRU methods; [8] the 2024 Gärtner-Russon power analysis paper; [9-12] the four 2024-2025 smLIP cryptanalysis papers; and [13] NIST IR 8610 from May 2026 reporting the Round 3 advancement. The reference implementation is at hawk-sign.info.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:360px;height:360px;top:-70px;right:-60px;background:#38bdf8;opacity:0.06;"></div>
+        <div class="blob" style="width:240px;height:240px;bottom:-50px;left:-40px;background:#818cf8;opacity:0.05;"></div>
+    </div>
+    <div class="content">
+        <div class="section-label reveal">Bibliography</div>
+        <h2 class="font-display reveal" style="font-size:clamp(1.6rem,3.2vw,2.3rem);font-weight:700;margin-bottom:0.9rem;">References</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[1]</span> Bos et al. <em>HAWK v1.1: Round-2 Specification Document.</em> NIST PQC, Feb. 2025.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[2]</span> P.W. Shor. <em>Algorithms for quantum computation.</em> FOCS, 1994.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[3]</span> NIST. <em>Post-Quantum Cryptography Standardization.</em> 2024. csrc.nist.gov</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[4]</span> Gentry, Peikert, Vaikuntanathan. <em>Trapdoors for hard lattices.</em> STOC, 2008.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[5]</span> Ducas &amp; van Woerden. <em>HAWK: Module LIP makes lattice signatures faster.</em> ASIACRYPT 2022.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[8]</span> Gärtner &amp; Russon. <em>Power analysis attacks against HAWK's Gaussian sampler.</em> IACR, 2024.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[9–12]</span> Miller et al.; Cohn, Fehr, Menezes; Lee et al.; van Woerden et al. <em>smLIP cryptanalysis.</em> IACR, 2024–25.</p></div>
+            <div class="glass-card reveal" style="padding:0.6rem 0.85rem;"><p style="font-size:0.71rem;color:#94a3b8;line-height:1.5;margin:0;"><span style="color:#38bdf8;font-weight:700;">[13]</span> Moody et al. <em>Status Report on Second Round Additional Signatures.</em> NIST IR 8610, May 2026.</p></div>
+        </div>
+        <p class="reveal" style="font-size:0.7rem;color:#64748b;margin-top:0.7rem;text-align:center;">Full reference list in manuscript · Implementation available at <strong style="color:#38bdf8;">hawk-sign.info</strong></p>
+    </div>
+</div>
+
+<!-- SLIDE 19: THANK YOU -->
+<div class="slide slide-19" data-slide="19" data-notes="Thank you for your attention. I hope this presentation provided a clear understanding of HAWK: its mathematical foundations in cyclotomic ring lattices, the GPV hash-and-sign design, the three algorithms and their isochronous implementation, the cryptanalytic landscape, and the current NIST Round 3 status. I am happy to take questions on any aspect — the NTRU equation in key generation, the BKZ security estimates and their methodological limitations, the smLIP open problem, or the practical deployment considerations for constrained hardware.">
+    <div class="gradient-mesh">
+        <div class="blob" style="width:580px;height:580px;top:-130px;right:-120px;background:#38bdf8;opacity:0.14;"></div>
+        <div class="blob" style="width:380px;height:380px;bottom:-100px;left:-90px;background:#818cf8;opacity:0.12;"></div>
+        <div class="blob" style="width:260px;height:260px;top:45%;left:14%;background:#34d399;opacity:0.09;"></div>
+    </div>
+    <canvas class="particle-canvas" style="position:absolute;inset:0;z-index:1;"></canvas>
+    <div class="content text-center">
+        <div style="font-size:80px;margin-bottom:0.8rem;animation:float 3.5s ease-in-out infinite;">🦅</div>
+        <h2 class="font-display reveal" style="font-size:clamp(2.5rem,5.5vw,4rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#818cf8,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.5rem;">Thank You</h2>
+        <p class="reveal" style="font-size:clamp(0.8rem,1.3vw,0.95rem);color:#94a3b8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1.5rem;">Questions Welcome</p>
+        <div class="reveal" style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+            <div class="glass-card" style="padding:0.55rem 1.1rem;"><span style="font-size:0.76rem;color:#38bdf8;">hawk-sign.info</span></div>
+            <div class="glass-card" style="padding:0.55rem 1.1rem;"><span style="font-size:0.76rem;color:#818cf8;">NIST IR 8610 · May 2026</span></div>
+            <div class="glass-card" style="padding:0.55rem 1.1rem;"><span style="font-size:0.76rem;color:#34d399;">CS-UY 3943 · NYU Tandon</span></div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /.deck -->
+
+<!-- NAVIGATION -->
+<div class="nav-controls">
+    <button class="nav-btn" onclick="changeSlide(-1)">&#8249;</button>
+    <div class="slide-dots" id="dots"></div>
+    <button class="nav-btn" onclick="changeSlide(1)">&#8250;</button>
+    <span class="slide-counter" id="counter">1 / 19</span>
+</div>
+
+<button class="notes-toggle" id="notesToggle" onclick="toggleNotes()" title="Press N to toggle">📝 Notes (N)</button>
+<div class="notes-panel" id="notesPanel">
+    <h4>Speaker Notes — Slide <span id="notesSlideNum">1</span></h4>
+    <p id="notesText"></p>
+</div>
+
+<script>
+    let current = 1;
+    const total = document.querySelectorAll('.slide').length;
+    const dotsContainer = document.getElementById('dots');
+    const counter = document.getElementById('counter');
+    for (let i = 1; i <= total; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot' + (i === 1 ? ' active' : '');
+        dot.onclick = () => goToSlide(i);
+        dotsContainer.appendChild(dot);
+    }
+
+    function goToSlide(n) {
+        const prev = document.querySelector('.slide.active');
+        const next = document.querySelector('.slide[data-slide="' + n + '"]');
+        if (prev) prev.classList.remove('active');
+        if (next) { next.classList.add('active'); animateSlide(next); }
+        current = n; updateNav(); updateNotes();
+    }
+    function changeSlide(dir) { let next = current + dir; if (next < 1) next = total; if (next > total) next = 1; goToSlide(next); }
+    function updateNav() {
+        document.querySelectorAll('.dot').forEach(function(d, i) { d.classList.toggle('active', i + 1 === current); });
+        counter.textContent = current + ' / ' + total;
+    }
+    function updateNotes() {
+        const activeSlide = document.querySelector('.slide.active');
+        document.getElementById('notesText').textContent = activeSlide ? (activeSlide.dataset.notes || '') : '';
+        document.getElementById('notesSlideNum').textContent = current;
+    }
+    function toggleNotes() {
+        document.getElementById('notesPanel').classList.toggle('visible');
+        updateNotes();
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); changeSlide(-1); }
+        if (e.key === 'n' || e.key === 'N') toggleNotes();
+    });
+    var touchStartX = 0;
+    document.addEventListener('touchstart', function(e) { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', function(e) { var diff = touchStartX - e.changedTouches[0].clientX; if (Math.abs(diff) > 50) changeSlide(diff > 0 ? 1 : -1); });
+
+    function animateSlide(slide) {
+        slide.querySelectorAll('.reveal').forEach(function(el, i) {
+            el.style.transition = 'none';
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.offsetHeight;
+            var delay = i * 0.08;
+            el.style.transition = 'opacity 0.35s ease ' + delay + 's, transform 0.35s ease ' + delay + 's';
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0px)';
+        });
+    }
+
+    document.addEventListener('mousemove', function(e) {
+        var spotlight = document.querySelector('.mouse-spotlight');
+        if (spotlight) spotlight.style.background = 'radial-gradient(600px circle at ' + e.clientX + 'px ' + e.clientY + 'px, rgba(56,189,248,0.055), transparent 40%)';
+    });
+
+    window.initParticles = function(canvas, options) {
+        if (!canvas) return;
+        var ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+        var interactive = options.interactive !== false;
+        var count = options.count || (interactive ? 55 : 18);
+        var mx = -1000, my = -1000;
+        var particles = [];
+        for (var i = 0; i < count; i++) {
+            particles.push({
+                x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+                size: Math.random() * 2.5 + 0.8, alpha: Math.random() * 0.3 + 0.08
+            });
+        }
+        if (interactive) {
+            canvas.addEventListener('mousemove', function(e) { var rect = canvas.getBoundingClientRect(); mx = e.clientX - rect.left; my = e.clientY - rect.top; });
+            canvas.addEventListener('mouseleave', function() { mx = -1000; my = -1000; });
+        }
+        (function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(function(p) {
+                if (interactive) { var dx = p.x - mx, dy = p.y - my, dist = Math.sqrt(dx*dx+dy*dy); if (dist < 120) { var force = (120-dist)/120*2; p.vx += (dx/dist)*force*0.1; p.vy += (dy/dist)*force*0.1; } }
+                p.vx *= 0.98; p.vy *= 0.98; p.x += p.vx; p.y += p.vy;
+                if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(56,189,248,' + p.alpha + ')'; ctx.fill();
+            });
+            requestAnimationFrame(animate);
+        })();
+    };
+    document.querySelectorAll('.particle-canvas').forEach(function(c) { window.initParticles(c, { interactive: true, count: 55 }); });
+    document.querySelectorAll('.particle-canvas-ambient').forEach(function(c) { window.initParticles(c, { interactive: false, count: 18 }); });
+
+    try { animateSlide(document.querySelector('.slide.active')); } catch(e) { console.warn(e); }
+    updateNotes();
+</script>
+</body>
+</html>

@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hawk Post-Quantum Signatures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300..700&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<style>
+/* ===== DESIGN TOKENS ===== */
+:root, [data-theme="light"] {
+  --color-bg: #f4f3ef;
+  --color-surface: #f9f8f5;
+  --color-surface-2: #ffffff;
+  --color-surface-offset: #ece9e4;
+  --color-divider: #dcd9d5;
+  --color-border: #d0cdc7;
+  --color-text: #1a1916;
+  --color-text-muted: #6b6a65;
+  --color-text-faint: #b0aead;
+  --color-text-inverse: #f9f8f4;
+  --color-primary: #5b4fcf;
+  --color-primary-hover: #4a3fb8;
+  --color-primary-active: #3730a3;
+  --color-primary-highlight: #e0ddfa;
+  --color-success: #2d7a4a;
+  --color-success-highlight: #d0ead9;
+  --color-error: #b91c1c;
+  --color-error-highlight: #fee2e2;
+  --color-warning: #a16207;
+  --color-warning-highlight: #fef3c7;
+  --color-accent: #7c3aed;
+  --color-accent2: #0891b2;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 3px oklch(0.2 0.01 80 / 0.08);
+  --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.1);
+  --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / 0.14);
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem; --space-5: 1.25rem; --space-6: 1.5rem;
+  --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] {
+  --color-bg: #0d0c0e;
+  --color-surface: #131218;
+  --color-surface-2: #1a1920;
+  --color-surface-offset: #1f1e26;
+  --color-divider: #2a2832;
+  --color-border: #35333f;
+  --color-text: #e8e6f0;
+  --color-text-muted: #7a7888;
+  --color-text-faint: #4a4858;
+  --color-text-inverse: #1a1916;
+  --color-primary: #8b7ff5;
+  --color-primary-hover: #a094f7;
+  --color-primary-active: #bab0fa;
+  --color-primary-highlight: #2d2a4e;
+  --color-success: #4ade80;
+  --color-success-highlight: #14532d;
+  --color-error: #f87171;
+  --color-error-highlight: #450a0a;
+  --color-warning: #facc15;
+  --color-warning-highlight: #422006;
+  --color-accent: #a78bfa;
+  --color-accent2: #22d3ee;
+  --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 16px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.5);
+}
+
+/* ===== BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  min-height: 100dvh;
+  line-height: 1.6;
+}
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+input, textarea { font: inherit; color: inherit; }
+img { display: block; max-width: 100%; }
+
+/* ===== LAYOUT ===== */
+.app-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+}
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.sidebar {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-6) 0;
+  overflow-y: auto;
+}
+.main-content {
+  padding: var(--space-8) var(--space-6);
+  overflow-y: auto;
+  max-width: 860px;
+}
+
+/* ===== LOGO ===== */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent2) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== NAV ===== */
+.nav-section {
+  margin-bottom: var(--space-6);
+}
+.nav-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  padding: 0 var(--space-5) var(--space-2);
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 0;
+  transition: all var(--transition);
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+}
+.nav-item:hover { background: var(--color-surface-offset); color: var(--color-text); }
+.nav-item.active {
+  color: var(--color-primary);
+  background: var(--color-primary-highlight);
+  border-left-color: var(--color-primary);
+  font-weight: 500;
+}
+.nav-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.nav-item.active .nav-dot { opacity: 1; }
+
+/* ===== PAGE ===== */
+.page { display: none; }
+.page.active { display: block; }
+.page-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.02em;
+}
+.page-desc {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-8);
+  max-width: 65ch;
+}
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+.card-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+.card-divider {
+  height: 1px;
+  background: var(--color-divider);
+  margin: var(--space-4) 0;
+}
+
+/* ===== FORM CONTROLS ===== */
+.form-group { margin-bottom: var(--space-4); }
+.form-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+}
+.form-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.15);
+}
+textarea.form-input { min-height: 80px; resize: vertical; font-family: var(--font-mono); font-size: var(--text-xs); }
+select.form-input { cursor: pointer; }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:active { background: var(--color-primary-active); transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+.btn-ghost:hover { background: var(--color-surface-offset); color: var(--color-text); }
+.btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+
+/* ===== RESULT BLOCK ===== */
+.result-block {
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-offset);
+  border-bottom: 1px solid var(--color-border);
+}
+.result-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.result-body {
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-all;
+  background: var(--color-surface-2);
+  max-height: 120px;
+  overflow-y: auto;
+  color: var(--color-accent);
+  line-height: 1.5;
+}
+
+/* ===== STATUS BADGES ===== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.badge-success { background: var(--color-success-highlight); color: var(--color-success); }
+.badge-error { background: var(--color-error-highlight); color: var(--color-error); }
+.badge-warning { background: var(--color-warning-highlight); color: var(--color-warning); }
+.badge-info { background: var(--color-primary-highlight); color: var(--color-primary); }
+
+/* ===== ALERT ===== */
+.alert {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  margin-top: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.alert-success { background: var(--color-success-highlight); color: var(--color-success); border: 1px solid var(--color-success); }
+.alert-error { background: var(--color-error-highlight); color: var(--color-error); border: 1px solid var(--color-error); }
+.alert-info { background: var(--color-primary-highlight); color: var(--color-primary); border: 1px solid var(--color-primary); }
+
+/* ===== LOADING SPINNER ===== */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid oklch(from var(--color-primary) l c h / 0.3);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
+
+/* ===== STAT CARDS ===== */
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-bottom: var(--space-6); }
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.stat-value { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--color-primary); }
+.stat-label { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-1); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ===== FLOW DEMO ===== */
+.flow-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.flow-arrow {
+  text-align: center;
+  color: var(--color-primary);
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.client-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+.client-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.client-avatar {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+.avatar-alice { background: linear-gradient(135deg, #7c3aed, #a78bfa); color: white; }
+.avatar-bob { background: linear-gradient(135deg, #0891b2, #22d3ee); color: white; }
+
+/* ===== COPY BTN ===== */
+.copy-btn {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.copy-btn:hover { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+
+/* ===== STEPS ===== */
+.step-list { counter-reset: steps; }
+.step-item {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  counter-increment: steps;
+}
+.step-num {
+  width: 28px; height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.step-content { flex: 1; }
+.step-title { font-weight: 600; font-size: var(--text-sm); margin-bottom: var(--space-1); }
+.step-desc { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.6; }
+
+/* ===== THEME TOGGLE ===== */
+.theme-toggle {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  transition: all var(--transition);
+}
+.theme-toggle:hover { background: var(--color-surface-offset); color: var(--color-text); }
+
+/* ===== CHIP ===== */
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-5); }
+.chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--color-surface-offset);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.chip.active { background: var(--color-primary-highlight); color: var(--color-primary); border-color: var(--color-primary); }
+
+/* ===== TIMELINE ===== */
+.timeline { position: relative; padding-left: var(--space-6); }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--color-divider);
+}
+.timeline-item { position: relative; margin-bottom: var(--space-4); }
+.timeline-dot {
+  position: absolute;
+  left: calc(-1 * var(--space-6) + 4px);
+  top: 6px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--color-surface);
+  background: var(--color-text-faint);
+}
+.timeline-dot.done { background: var(--color-success); }
+.timeline-dot.active { background: var(--color-primary); animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 oklch(from var(--color-primary) l c h / 0.4)} 50%{box-shadow:0 0 0 6px oklch(from var(--color-primary) l c h / 0)} }
+.timeline-content { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.timeline-title { font-size: var(--text-sm); font-weight: 600; }
+.timeline-meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; font-family: var(--font-mono); }
+
+/* ===== SERVER NOTE ===== */
+.server-note {
+  background: var(--color-warning-highlight);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+  margin-bottom: var(--space-6);
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.code-block {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-x: auto;
+  line-height: 1.7;
+  white-space: pre;
+  margin: var(--space-3) 0;
+}
+.code-keyword { color: var(--color-accent); }
+.code-string { color: var(--color-accent2); }
+.code-comment { color: var(--color-text-faint); font-style: italic; }
+
+/* ===== ABOUT PAGE ===== */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.info-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.info-card h3 { font-size: var(--text-sm); font-weight: 700; margin-bottom: var(--space-3); color: var(--color-primary); }
+.info-card p { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.7; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .flow-grid { grid-template-columns: 1fr; }
+  .info-grid { grid-template-columns: 1fr; }
+  .main-content { padding: var(--space-5) var(--space-4); }
+}
+
+/* ===== PARTICLES ===== */
+.hero-glow {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 300px;
+  background: radial-gradient(ellipse 60% 40% at 30% 0%, oklch(from var(--color-accent) l c h / 0.06) 0%, transparent 70%),
+              radial-gradient(ellipse 40% 30% at 70% 0%, oklch(from var(--color-accent2) l c h / 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== TRANSITION ANIMATION ===== */
+.page {
+  animation: fadeSlide 0.25s ease forwards;
+}
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== API URL BAR ===== */
+.api-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.api-url-input {
+  flex: 1;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  outline: none;
+  transition: border-color var(--transition);
+}
+.api-url-input:focus { border-color: var(--color-primary); color: var(--color-text); }
+.method-badge {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+
+<div class="hero-glow"></div>
+
+<div class="app-shell">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <span>Hawk PQC Demo</span>
+      <span class="badge badge-error" style="margin-left:4px">Broken &middot; Withdrawn 2026</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-4)">
+      <span style="font-size:var(--text-xs);color:var(--color-text-muted)">Post-Quantum Digital Signatures</span>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Navigate</div>
+      <button class="nav-item active" onclick="showPage('overview', this)">
+        <div class="nav-dot"></div> Overview
+      </button>
+      <button class="nav-item" onclick="showPage('keygen', this)">
+        <div class="nav-dot"></div> Key Generation
+      </button>
+      <button class="nav-item" onclick="showPage('sign', this)">
+        <div class="nav-dot"></div> Sign Message
+      </button>
+      <button class="nav-item" onclick="showPage('verify', this)">
+        <div class="nav-dot"></div> Verify Signature
+      </button>
+      <button class="nav-item" onclick="showPage('flow', this)">
+        <div class="nav-dot"></div> Client Flow Demo
+      </button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Reference</div>
+      <button class="nav-item" onclick="showPage('api', this)">
+        <div class="nav-dot"></div> REST API Reference
+      </button>
+      <button class="nav-item" onclick="showPage('about', this)">
+        <div class="nav-dot"></div> About Hawk
+      </button>
+    </div>
+
+    <div style="padding: var(--space-5); border-top: 1px solid var(--color-divider); margin-top: var(--space-4);">
+      <div style="font-size:var(--text-xs);color:var(--color-text-faint);margin-bottom:var(--space-3)">API Server Status</div>
+      <div style="display:flex;align-items:center;gap:var(--space-2)">
+        <div id="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--color-text-faint)"></div>
+        <span id="status-label" style="font-size:var(--text-xs);color:var(--color-text-muted)">Not connected</span>
+      </div>
+      <input class="form-input" id="api-base-url" value="http://localhost:5050" style="margin-top:var(--space-3);font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-2) var(--space-3)" placeholder="http://localhost:5050" oninput="saveBaseUrl()">
+      <button class="btn btn-ghost btn-sm" onclick="checkStatus()" style="width:100%;margin-top:var(--space-2);justify-content:center">Check Status</button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- WITHDRAWAL NOTICE -->
+    <div style="border:1px solid var(--color-error);background:var(--color-error-highlight);color:var(--color-error);border-radius:8px;padding:14px 16px;margin-bottom:var(--space-5);font-size:var(--text-sm);line-height:1.55">
+      <strong>Hawk is broken and was withdrawn from NIST standardisation on 29 July 2026.</strong>
+      A polynomial-time reduction takes Hawk-<em>n</em> key recovery to SVP in dimension <em>n</em>/2&nbsp;+&nbsp;1; a Hawk-256 secret key was recovered end-to-end in hours on one server.
+      This demo is kept as a teaching archive only &mdash; it must not be used to protect anything.
+      <a href="https://eprint.iacr.org/2026/1593" style="color:inherit;text-decoration:underline">Straznickas &amp; Weis, ePrint 2026/1593</a>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section id="page-overview" class="page active">
+      <div class="page-title">Hawk Post-Quantum Signatures</div>
+      <p class="page-desc">Hawk is a lattice-based digital signature scheme built on the Module Lattice Isomorphism Problem (Module-LIP). It reached Round 3 of NIST's Additional Signatures process as the only remaining lattice-based candidate, then was withdrawn in July 2026 after a practical key-recovery attack. Everything below describes the scheme as specified in Hawk v1.1 &mdash; it is a study of a broken design, not a usable one.</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">Hawk-512</div>
+          <div class="stat-label">Default Variant</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">NIST-I</div>
+          <div class="stat-label">Security Level</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">555 B</div>
+          <div class="stat-label">Signature Size</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          Protocol Overview
+        </div>
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Key Generation</div>
+              <div class="step-desc">Generates a short NTRU lattice basis <code>(f, g, F, G)</code> from a random seed. The public key encodes <code>q₀₀ = ff* + gg*</code> and <code>q₀₁ = Ff* + Gg*</code> in the ring ℤ[x]/(xⁿ+1). The private key stores a compressed seed plus <code>F mod 2</code>, <code>G mod 2</code>.</div>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Signing</div>
+              <div class="step-desc">Hashes the message to get polynomials <code>(h₀, h₁)</code> using SHAKE-256. Samples a short vector <code>(s₀, s₁)</code> from a discrete Gaussian centered at the lattice coset. Outputs <code>(salt, s₁)</code> — the salt and the second signature polynomial.</div>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">Verification</div>
+              <div class="step-desc">Reconstructs <code>s₀</code> from <code>s₁</code> and the public key, recomputes the hash, checks the sym-break condition and that the norm <code>‖(s₀, s₁)‖_Q² ≤ 8n · σ_verify²</code> holds. Returns True iff all checks pass.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Security Parameters
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:var(--text-xs)">
+          <thead>
+            <tr style="border-bottom:1px solid var(--color-divider)">
+              <th style="text-align:left;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">Variant</th>
+              <th style="text-align:right;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">Degree n</th>
+              <th style="text-align:right;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">Priv Key</th>
+              <th style="text-align:right;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">Pub Key</th>
+              <th style="text-align:right;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">Signature</th>
+              <th style="text-align:center;padding:var(--space-2) var(--space-3);color:var(--color-text-muted);font-weight:600">NIST Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--color-divider)">
+              <td style="padding:var(--space-3);font-weight:600;color:var(--color-text-faint)">Hawk-256</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">256</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">96 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">450 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">249 B</td>
+              <td style="text-align:center;padding:var(--space-3)"><span class="badge badge-warning">Challenge</span></td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--color-divider);background:var(--color-primary-highlight)">
+              <td style="padding:var(--space-3);font-weight:700;color:var(--color-primary)">Hawk-512 ★</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">512</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">184 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">1024 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">555 B</td>
+              <td style="text-align:center;padding:var(--space-3)"><span class="badge badge-success">NIST-I</span></td>
+            </tr>
+            <tr>
+              <td style="padding:var(--space-3);font-weight:600;color:var(--color-text-muted)">Hawk-1024</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">1024</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">360 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">2440 B</td>
+              <td style="text-align:right;padding:var(--space-3);font-family:var(--font-mono)">1221 B</td>
+              <td style="text-align:center;padding:var(--space-3)"><span class="badge badge-success">NIST-V</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- KEY GENERATION -->
+    <section id="page-keygen" class="page">
+      <div class="page-title">Key Generation</div>
+      <p class="page-desc">Generate a Hawk key pair for a client identity. The private key stays on the client; only the public key is shared.</p>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          Generate Key Pair
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+          <div class="form-group">
+            <label class="form-label">Client ID</label>
+            <input class="form-input" id="kg-client-id" value="alice" placeholder="e.g. alice">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hawk Variant</label>
+            <select class="form-input" id="kg-logn">
+              <option value="8">Hawk-256 (Challenge)</option>
+              <option value="9" selected>Hawk-512 (NIST-I) ★</option>
+              <option value="10">Hawk-1024 (NIST-V)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="kg-btn" onclick="doKeygen()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          Generate Keys
+        </button>
+
+        <div id="kg-loading" class="hidden" style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-4);color:var(--color-text-muted);font-size:var(--text-sm)">
+          <div class="spinner"></div>
+          Generating key pair... (sampling NTRU lattice basis)
+        </div>
+        <div id="kg-result" class="hidden">
+          <div class="card-divider"></div>
+          <div id="kg-alert"></div>
+          <div id="kg-pub-block"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-3);margin-top:var(--space-4)">
+            <div style="text-align:center;padding:var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg)">
+              <div style="font-size:var(--text-lg);font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-primary)" id="kg-priv-len">—</div>
+              <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px">Private Key (bytes)</div>
+            </div>
+            <div style="text-align:center;padding:var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg)">
+              <div style="font-size:var(--text-lg);font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-primary)" id="kg-pub-len">—</div>
+              <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px">Public Key (bytes)</div>
+            </div>
+            <div style="text-align:center;padding:var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg)">
+              <div style="font-size:var(--text-lg);font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-primary)" id="kg-variant">—</div>
+              <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px">Variant</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SIGN -->
+    <section id="page-sign" class="page">
+      <div class="page-title">Sign a Message</div>
+      <p class="page-desc">Sign any message with a client's private key. The result is a Hawk signature that any party can verify with just the public key.</p>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+          Create Signature
+        </div>
+        <div class="form-group">
+          <label class="form-label">Client ID (must have keys)</label>
+          <input class="form-input" id="sign-client-id" value="alice" placeholder="Client with existing keys">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message to Sign</label>
+          <textarea class="form-input" id="sign-message" rows="3" placeholder="Enter any text message...">Hello Keshav! This message is post-quantum signed.</textarea>
+        </div>
+        <button class="btn btn-primary" id="sign-btn" onclick="doSign()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+          Sign Message
+        </button>
+
+        <div id="sign-loading" class="hidden" style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-4);color:var(--color-text-muted);font-size:var(--text-sm)">
+          <div class="spinner"></div>
+          Sampling discrete Gaussian and encoding signature...
+        </div>
+        <div id="sign-result" class="hidden">
+          <div class="card-divider"></div>
+          <div id="sign-alert"></div>
+          <div id="sign-sig-block"></div>
+          <div id="sign-pub-block"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VERIFY -->
+    <section id="page-verify" class="page">
+      <div class="page-title">Verify Signature</div>
+      <p class="page-desc">Verify a Hawk signature against a public key and message. Any client can verify without knowing the private key.</p>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Verify a Signature
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hawk Variant</label>
+          <select class="form-input" id="verify-logn">
+            <option value="8">Hawk-256</option>
+            <option value="9" selected>Hawk-512</option>
+            <option value="10">Hawk-1024</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message</label>
+          <input class="form-input" id="verify-message" placeholder="Original message" value="Hello Keshav! This message is post-quantum signed.">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Public Key (Base64)</label>
+          <textarea class="form-input" id="verify-pub" rows="2" placeholder="Paste Base64 public key..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Signature (Base64)</label>
+          <textarea class="form-input" id="verify-sig" rows="2" placeholder="Paste Base64 signature..."></textarea>
+        </div>
+        <div style="display:flex;gap:var(--space-3)">
+          <button class="btn btn-primary" id="verify-btn" onclick="doVerify()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Verify
+          </button>
+          <button class="btn btn-ghost" onclick="autoFillVerify()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Auto-fill from last sign
+          </button>
+        </div>
+
+        <div id="verify-loading" class="hidden" style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-4);color:var(--color-text-muted);font-size:var(--text-sm)">
+          <div class="spinner"></div>
+          Running verification algorithm...
+        </div>
+        <div id="verify-result" class="hidden">
+          <div class="card-divider"></div>
+          <div id="verify-alert"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW DEMO -->
+    <section id="page-flow" class="page">
+      <div class="page-title">Client Communication Flow</div>
+      <p class="page-desc">Simulate Alice signing a message and Bob verifying it — demonstrating end-to-end cryptographically authenticated communication using Hawk-512.</p>
+
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          Step-by-Step Demo
+        </div>
+        <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-5);flex-wrap:wrap">
+          <button class="btn btn-primary" id="flow-btn" onclick="runFullFlow()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run Full Demo
+          </button>
+          <button class="btn btn-ghost" onclick="resetFlow()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Message from Alice to Bob</label>
+          <input class="form-input" id="flow-message" value="Bob, the meeting is at 3PM. — Alice">
+        </div>
+
+        <div id="flow-timeline" class="timeline" style="margin-top:var(--space-6)">
+          <div class="timeline-item">
+            <div class="timeline-dot" id="tl-dot-0"></div>
+            <div class="timeline-content">
+              <div class="timeline-title">Waiting to start</div>
+              <div class="timeline-meta">Click "Run Full Demo" to begin</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="flow-grid" class="hidden" style="margin-top:var(--space-6)">
+          <div class="flow-grid">
+            <div class="client-card" id="alice-card">
+              <div class="client-header">
+                <div class="client-avatar avatar-alice">A</div>
+                <div>
+                  <div style="font-weight:700;font-size:var(--text-sm)">Alice</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Sender / Signer</div>
+                </div>
+                <span id="alice-status" class="badge badge-info" style="margin-left:auto">idle</span>
+              </div>
+              <div id="alice-key-info" style="font-size:var(--text-xs);color:var(--color-text-muted)">No keys yet</div>
+            </div>
+            <div class="client-card" id="bob-card">
+              <div class="client-header">
+                <div class="client-avatar avatar-bob">B</div>
+                <div>
+                  <div style="font-weight:700;font-size:var(--text-sm)">Bob</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Receiver / Verifier</div>
+                </div>
+                <span id="bob-status" class="badge badge-info" style="margin-left:auto">idle</span>
+              </div>
+              <div id="bob-verify-result" style="font-size:var(--text-xs);color:var(--color-text-muted)">Waiting for message...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- API REFERENCE -->
+    <section id="page-api" class="page">
+      <div class="page-title">REST API Reference</div>
+      <p class="page-desc">The Flask backend exposes these endpoints. Run <code style="font-family:var(--font-mono);font-size:0.9em;background:var(--color-surface-offset);padding:1px 6px;border-radius:4px">python app.py</code> to start the server on port 5050.</p>
+
+      <div class="server-note">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div><strong>Research use only.</strong> This is the <a href="https://github.com/hawk-sign/hawk-py" target="_blank" rel="noopener" style="color:inherit">hawk-sign/hawk-py</a> specification-level implementation — not audited for production. The authors note it uses floating-point NTRUSolve and may not be compliant with the reference C implementation.</div>
+      </div>
+
+      <div class="card">
+        <div class="api-bar">
+          <span class="method-badge">POST</span>
+          <input class="api-url-input" readonly value="/api/keygen">
+        </div>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3)">Generate a Hawk key pair for a client. Private key is stored server-side; public key is returned.</p>
+        <div class="code-block"><span class="code-comment">// Request</span>
+{ <span class="code-string">"client_id"</span>: <span class="code-string">"alice"</span>, <span class="code-string">"logn"</span>: <span class="code-keyword">9</span> }
+
+<span class="code-comment">// Response</span>
+{
+  <span class="code-string">"client_id"</span>: <span class="code-string">"alice"</span>,
+  <span class="code-string">"variant"</span>: <span class="code-string">"Hawk-512"</span>,
+  <span class="code-string">"pub_b64"</span>: <span class="code-string">"&lt;base64&gt;"</span>,
+  <span class="code-string">"priv_len"</span>: <span class="code-keyword">184</span>,
+  <span class="code-string">"pub_len"</span>: <span class="code-keyword">1024</span>
+}</div>
+      </div>
+
+      <div class="card">
+        <div class="api-bar">
+          <span class="method-badge">POST</span>
+          <input class="api-url-input" readonly value="/api/sign">
+        </div>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3)">Sign a message with the client's stored private key. Returns the Base64 signature and public key.</p>
+        <div class="code-block"><span class="code-comment">// Request</span>
+{ <span class="code-string">"client_id"</span>: <span class="code-string">"alice"</span>, <span class="code-string">"message"</span>: <span class="code-string">"Hello world"</span> }
+
+<span class="code-comment">// Response</span>
+{
+  <span class="code-string">"signature_b64"</span>: <span class="code-string">"&lt;base64&gt;"</span>,
+  <span class="code-string">"pub_b64"</span>: <span class="code-string">"&lt;base64&gt;"</span>,
+  <span class="code-string">"sig_len"</span>: <span class="code-keyword">555</span>,
+  <span class="code-string">"variant"</span>: <span class="code-string">"Hawk-512"</span>
+}</div>
+      </div>
+
+      <div class="card">
+        <div class="api-bar">
+          <span class="method-badge">POST</span>
+          <input class="api-url-input" readonly value="/api/verify">
+        </div>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3)">Verify a Hawk signature. Requires the public key, message, and signature — does not need the private key.</p>
+        <div class="code-block"><span class="code-comment">// Request</span>
+{
+  <span class="code-string">"logn"</span>: <span class="code-keyword">9</span>,
+  <span class="code-string">"message"</span>: <span class="code-string">"Hello world"</span>,
+  <span class="code-string">"pub_b64"</span>: <span class="code-string">"&lt;base64&gt;"</span>,
+  <span class="code-string">"signature_b64"</span>: <span class="code-string">"&lt;base64&gt;"</span>
+}
+
+<span class="code-comment">// Response</span>
+{ <span class="code-string">"valid"</span>: <span class="code-keyword">true</span>, <span class="code-string">"variant"</span>: <span class="code-string">"Hawk-512"</span> }</div>
+      </div>
+
+      <div class="card">
+        <div class="api-bar">
+          <span class="method-badge" style="background:var(--color-success-highlight);color:var(--color-success)">GET</span>
+          <input class="api-url-input" readonly value="/api/clients">
+        </div>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3)">List all registered clients and their public keys.</p>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="page-about" class="page">
+      <div class="page-title">About Hawk</div>
+      <p class="page-desc">Hawk is a post-quantum digital signature scheme by Léo Ducas, Eamonn Postlethwaite, Ludo Pulles, and Wessel van Woerden, based on the Module Lattice Isomorphism Problem.</p>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>Security Foundation</h3>
+          <p>Hawk's security rested on the hardness of the Module Lattice Isomorphism Problem (Module-LIP) in the ring ℤ[x]/(xⁿ+1) — distinct from the LWE/SIS assumptions behind ML-DSA and Falcon. That assumption did not hold for Hawk's power-of-two cyclotomics: the 2026 attack uses the Galois involution ζ ↦ −ζ to halve the lattice dimension an attacker must reduce.</p>
+        </div>
+        <div class="info-card">
+          <h3>Hash-Then-Sign Design</h3>
+          <p>Hawk uses a hash-then-sign approach: the message is first hashed to a lattice target vector (h₀, h₁) using SHAKE-256, then a short preimage is found by sampling a discrete Gaussian distribution over the lattice coset.</p>
+        </div>
+        <div class="info-card">
+          <h3>Key Structure</h3>
+          <p>The private key is a short NTRU basis (f, g, F, G) satisfying fG − gF = 1 mod q. The public key encodes the Gram matrix polynomials q₀₀ and q₀₁ derived from this basis. Key generation uses NTRUSolve from Falcon.</p>
+        </div>
+        <div class="info-card">
+          <h3>Compact Signatures</h3>
+          <p>Hawk-512 signatures are 555 bytes, smaller than Falcon-512 (666 bytes) and dramatically smaller than SPHINCS+, with no floating-point arithmetic anywhere. This compactness was the scheme's main appeal — and restoring security would have required doubling parameters, which is exactly why the team withdrew it rather than repairing it.</p>
+        </div>
+        <div class="info-card">
+          <h3>NIST Process</h3>
+          <p>Hawk advanced to Round 3 of NIST's Additional Digital Signatures call in May 2026 as its only lattice-based candidate, then was withdrawn on 29 July 2026. Its claimed levels — Hawk-512 at NIST level I, Hawk-1024 at level V — no longer hold: key recovery drops from 2<sup>150</sup> to 2<sup>108</sup> and 2<sup>288</sup> to 2<sup>182</sup> gates respectively.</p>
+        </div>
+        <div class="info-card">
+          <h3>Implementation</h3>
+          <p>This demo uses <a href="https://github.com/hawk-sign/hawk-py" target="_blank" rel="noopener" style="color:var(--color-primary)">hawk-sign/hawk-py</a> — the Python specification implementation. The reference C implementation (ref + AVX2) is in <a href="https://github.com/hawk-sign/dev" target="_blank" rel="noopener" style="color:var(--color-primary)">hawk-sign/dev</a> with 10–100× better performance.</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:var(--space-5)">
+        <div class="card-title">Running Locally</div>
+        <div class="code-block"><span class="code-comment"># Set up</span>
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -r requirements.txt
+
+<span class="code-comment"># Run the Flask API server (it also serves this page)</span>
+python app.py
+
+<span class="code-comment"># Open http://127.0.0.1:5050</span></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ===== STATE =====
+// When this page is served by app.py, talk to the same origin; when it is opened
+// straight off disk (file://), fall back to the default local server address.
+const DEFAULT_BASE_URL = location.protocol.startsWith('http')
+  ? location.origin
+  : 'http://localhost:5050';
+
+let state = { baseUrl: DEFAULT_BASE_URL, lastSign: null };
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+function saveBaseUrl() {
+  state.baseUrl = document.getElementById('api-base-url').value.trim().replace(/\/$/, '');
+}
+
+// ===== NAVIGATION =====
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ===== THEME =====
+(function(){
+  const t = document.querySelector('[data-theme-toggle]');
+  const r = document.documentElement;
+  let d = 'dark';
+  r.setAttribute('data-theme', d);
+  if (t) t.addEventListener('click', () => {
+    d = d === 'dark' ? 'light' : 'dark';
+    r.setAttribute('data-theme', d);
+    t.innerHTML = d === 'dark'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+  });
+})();
+
+// ===== API HELPERS =====
+async function apiCall(endpoint, method, body) {
+  const url = state.baseUrl + endpoint;
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ===== STATUS CHECK =====
+async function checkStatus() {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  try {
+    const d = await apiCall('/api/status', 'GET');
+    dot.style.background = 'var(--color-success)';
+    label.textContent = `Connected · ${d.clients} client(s)`;
+  } catch {
+    dot.style.background = 'var(--color-error)';
+    label.textContent = 'Server not reachable';
+  }
+}
+
+// ===== RESULT BLOCK =====
+function makeResultBlock(label, value, copyBtn = true) {
+  const id = 'res_' + Math.random().toString(36).slice(2);
+  return `<div class="result-block">
+    <div class="result-header">
+      <span class="result-label">${label}</span>
+      ${copyBtn ? `<button class="copy-btn" onclick="copyText('${id}', this)">Copy</button>` : ''}
+    </div>
+    <div class="result-body" id="${id}">${value}</div>
+  </div>`;
+}
+
+function copyText(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+function makeAlert(type, msg) {
+  const icons = {
+    success: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    error: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+    info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  };
+  return `<div class="alert alert-${type}">${icons[type] || ''}<span>${msg}</span></div>`;
+}
+
+// ===== KEYGEN =====
+async function doKeygen() {
+  const btn = document.getElementById('kg-btn');
+  const loading = document.getElementById('kg-loading');
+  const result = document.getElementById('kg-result');
+  const clientId = document.getElementById('kg-client-id').value.trim();
+  const logn = parseInt(document.getElementById('kg-logn').value);
+
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const d = await apiCall('/api/keygen', 'POST', { client_id: clientId, logn });
+    document.getElementById('kg-alert').innerHTML = makeAlert('success', `Key pair for <strong>${escapeHtml(d.client_id)}</strong> generated successfully (${escapeHtml(d.variant)})`);
+    document.getElementById('kg-priv-len').textContent = d.priv_len;
+    document.getElementById('kg-pub-len').textContent = d.pub_len;
+    document.getElementById('kg-variant').textContent = d.variant;
+    document.getElementById('kg-pub-block').innerHTML = makeResultBlock('Public Key (Base64)', d.pub_b64);
+    result.classList.remove('hidden');
+    checkStatus();
+  } catch (e) {
+    document.getElementById('kg-alert').innerHTML = makeAlert('error', escapeHtml(e.message));
+    result.classList.remove('hidden');
+  }
+
+  loading.classList.add('hidden');
+  btn.disabled = false;
+}
+
+// ===== SIGN =====
+async function doSign() {
+  const btn = document.getElementById('sign-btn');
+  const loading = document.getElementById('sign-loading');
+  const result = document.getElementById('sign-result');
+  const clientId = document.getElementById('sign-client-id').value.trim();
+  const message = document.getElementById('sign-message').value;
+
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const d = await apiCall('/api/sign', 'POST', { client_id: clientId, message });
+    state.lastSign = d;
+    document.getElementById('sign-alert').innerHTML = makeAlert('success', `Message signed by <strong>${escapeHtml(d.client_id)}</strong> using ${escapeHtml(d.variant)}. Signature size: <strong>${d.sig_len} bytes</strong>`);
+    document.getElementById('sign-sig-block').innerHTML = makeResultBlock('Signature (Base64)', d.signature_b64);
+    document.getElementById('sign-pub-block').innerHTML = makeResultBlock('Public Key (Base64)', d.pub_b64);
+    result.classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('sign-alert').innerHTML = makeAlert('error', escapeHtml(e.message));
+    document.getElementById('sign-sig-block').innerHTML = '';
+    document.getElementById('sign-pub-block').innerHTML = '';
+    result.classList.remove('hidden');
+  }
+
+  loading.classList.add('hidden');
+  btn.disabled = false;
+}
+
+// ===== VERIFY =====
+async function doVerify() {
+  const btn = document.getElementById('verify-btn');
+  const loading = document.getElementById('verify-loading');
+  const result = document.getElementById('verify-result');
+
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const d = await apiCall('/api/verify', 'POST', {
+      logn: parseInt(document.getElementById('verify-logn').value),
+      message: document.getElementById('verify-message').value,
+      pub_b64: document.getElementById('verify-pub').value.trim(),
+      signature_b64: document.getElementById('verify-sig').value.trim(),
+    });
+    const html = d.valid
+      ? makeAlert('success', `✓ <strong>Valid signature</strong> — The message is authentic and was signed by the owner of this public key (${escapeHtml(d.variant)}).`)
+      : makeAlert('error', `✗ <strong>Invalid signature</strong> — The signature does not verify. The message may have been tampered with, or the wrong public key was used.`);
+    document.getElementById('verify-alert').innerHTML = html;
+    result.classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('verify-alert').innerHTML = makeAlert('error', escapeHtml(e.message));
+    result.classList.remove('hidden');
+  }
+
+  loading.classList.add('hidden');
+  btn.disabled = false;
+}
+
+function autoFillVerify() {
+  if (!state.lastSign) {
+    alert('Sign a message first (Sign Message page).');
+    return;
+  }
+  document.getElementById('verify-message').value = state.lastSign.message;
+  document.getElementById('verify-pub').value = state.lastSign.pub_b64;
+  document.getElementById('verify-sig').value = state.lastSign.signature_b64;
+}
+
+// ===== FLOW DEMO =====
+let flowData = {};
+
+function resetFlow() {
+  flowData = {};
+  document.getElementById('flow-grid').classList.add('hidden');
+  document.getElementById('flow-timeline').innerHTML = `
+    <div class="timeline-item">
+      <div class="timeline-dot" id="tl-dot-0"></div>
+      <div class="timeline-content">
+        <div class="timeline-title">Waiting to start</div>
+        <div class="timeline-meta">Click "Run Full Demo" to begin</div>
+      </div>
+    </div>`;
+  document.getElementById('flow-btn').disabled = false;
+}
+
+function addTimelineStep(title, meta, status) {
+  const tl = document.getElementById('flow-timeline');
+  const prev = tl.querySelectorAll('.timeline-dot');
+  prev.forEach(d => { if (d.classList.contains('active')) d.classList.replace('active', 'done'); });
+  const item = document.createElement('div');
+  item.className = 'timeline-item';
+  item.innerHTML = `
+    <div class="timeline-dot ${status}"></div>
+    <div class="timeline-content">
+      <div class="timeline-title">${title}</div>
+      <div class="timeline-meta">${meta}</div>
+    </div>`;
+  tl.appendChild(item);
+  item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runFullFlow() {
+  document.getElementById('flow-btn').disabled = true;
+  document.getElementById('flow-grid').classList.remove('hidden');
+  document.getElementById('flow-timeline').innerHTML = '';
+  const msg = document.getElementById('flow-message').value;
+
+  // Set statuses
+  const setAlice = (s, cls) => { document.getElementById('alice-status').textContent = s; document.getElementById('alice-status').className = 'badge ' + cls; };
+  const setBob = (s, cls) => { document.getElementById('bob-status').textContent = s; document.getElementById('bob-status').className = 'badge ' + cls; };
+
+  try {
+    // Step 1: Alice keygen
+    addTimelineStep('Alice generates Hawk-512 key pair', 'Sampling NTRU lattice basis...', 'active');
+    setAlice('keygen...', 'badge-warning');
+    await sleep(200);
+    const kgAlice = await apiCall('/api/keygen', 'POST', { client_id: 'flow_alice', logn: 9 });
+    flowData.alicePub = kgAlice.pub_b64;
+    flowData.logn = 9;
+    document.getElementById('alice-key-info').innerHTML = `
+      <div class="badge badge-success" style="margin-bottom:4px">Keys ready</div><br>
+      <span style="font-family:var(--font-mono);word-break:break-all;font-size:10px">${kgAlice.pub_b64.slice(0, 48)}...</span>`;
+    setAlice('keys ready', 'badge-success');
+    addTimelineStep('Alice: Key pair ready', `${kgAlice.variant} · priv ${kgAlice.priv_len}B · pub ${kgAlice.pub_len}B`, 'done');
+
+    // Step 2: Bob keygen
+    addTimelineStep('Bob generates Hawk-512 key pair', 'Sampling NTRU lattice basis...', 'active');
+    setBob('keygen...', 'badge-warning');
+    await sleep(200);
+    const kgBob = await apiCall('/api/keygen', 'POST', { client_id: 'flow_bob', logn: 9 });
+    document.getElementById('bob-verify-result').innerHTML = `<div class="badge badge-info">Keys ready — waiting for Alice's message</div>`;
+    setBob('waiting', 'badge-info');
+    addTimelineStep('Bob: Key pair ready', `${kgBob.variant} · priv ${kgBob.priv_len}B · pub ${kgBob.pub_len}B`, 'done');
+
+    // Step 3: Alice signs
+    addTimelineStep('Alice signs the message', `"${escapeHtml(msg.slice(0, 40))}..."`, 'active');
+    setAlice('signing...', 'badge-warning');
+    await sleep(200);
+    const signResult = await apiCall('/api/sign', 'POST', { client_id: 'flow_alice', message: msg });
+    flowData.sig = signResult.signature_b64;
+    setAlice('signed ✓', 'badge-success');
+    document.getElementById('alice-key-info').innerHTML += `<br><br><div class="badge badge-success">Message signed</div><br><span style="font-size:10px;color:var(--color-text-muted)">Signature: ${signResult.sig_len}B · Discrete Gaussian sample</span>`;
+    addTimelineStep('Alice: Signature created', `sig_len = ${signResult.sig_len} bytes · SHAKE-256 hash + Gaussian sampling`, 'done');
+
+    // Step 4: Transmit
+    addTimelineStep('Transmitting (msg + sig + pub_key) to Bob', 'Bob receives the signed message over the channel', 'active');
+    await sleep(500);
+    addTimelineStep('Bob receives signed message', 'Running Hawk verification algorithm...', 'done');
+
+    // Step 5: Bob verifies
+    addTimelineStep('Bob verifies Alice\'s signature', 'Checking norm bound and sym-break condition...', 'active');
+    setBob('verifying...', 'badge-warning');
+    await sleep(200);
+    const verifyResult = await apiCall('/api/verify', 'POST', {
+      logn: 9,
+      message: msg,
+      pub_b64: flowData.alicePub,
+      signature_b64: flowData.sig,
+    });
+    if (verifyResult.valid) {
+      setBob('✓ verified', 'badge-success');
+      document.getElementById('bob-verify-result').innerHTML = `<div class="badge badge-success" style="margin-bottom:6px">✓ Signature VALID</div><br><span style="font-size:var(--text-xs);color:var(--color-text-muted)">Message is authentic. Bob is certain this came from Alice.</span>`;
+      addTimelineStep('✓ Verification PASSED', 'Bob authenticated Alice\'s message. Communication is secure.', 'done');
+    } else {
+      setBob('✗ failed', 'badge-error');
+      addTimelineStep('✗ Verification FAILED', 'Unexpected failure.', 'done');
+    }
+
+  } catch (e) {
+    addTimelineStep('Error: ' + escapeHtml(e.message), 'Check that the Flask server is running on port 5050', 'active');
+    document.getElementById('flow-btn').disabled = false;
+  }
+  document.getElementById('flow-btn').disabled = false;
+}
+
+// Initial status check on load
+window.addEventListener('load', () => {
+  document.getElementById('api-base-url').value = DEFAULT_BASE_URL;
+  setTimeout(checkStatus, 500);
+});
+</script>
+</body>
+</html>

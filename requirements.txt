@@ -1,0 +1,8 @@
+# Runtime dependencies for the Hawk demo server.
+# numpy>=2 works: see hawk_crypto/PATCHES.md for the promotion fixes that made it work.
+numpy
+sympy
+flask
+flask-cors
+
+# Tests: pip install pytest

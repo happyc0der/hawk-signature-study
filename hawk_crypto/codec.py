@@ -222,7 +222,7 @@ def encode_public(logn, q00, q01):
     n = 1 << logn
 
     if q00[0] < -(2**15) or q00[0] >= 2**15:
-        return None, False
+        return None
 
     v = 16 - PARAMS(logn, "high00")
 

@@ -23,7 +23,8 @@ Errors return a non-2xx status with `{"error": "..."}`.
 ## `POST /api/keygen`
 
 Generates a key pair and stores it under `client_id`, replacing any existing one.
-This is the slow call: seconds for Hawk-256/512, minutes for Hawk-1024.
+This is the slow call — it solves the NTRU equation. Roughly 0.1s for Hawk-256, 0.7s for
+Hawk-512, and 4s for Hawk-1024; signing and verification are milliseconds by comparison.
 
 **Request**
 

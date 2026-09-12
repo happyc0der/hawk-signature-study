@@ -85,6 +85,20 @@ Falcon — the diversity that made Hawk valuable is also what made it fragile. T
 broke module-LIP for exactly the fields Hawk chose, by finding an automorphism of the key
 lattice that an attacker can recover from public data alone.
 
+## Performance
+
+This is the Python specification implementation, so these are illustrative, not Hawk's real
+numbers — the C implementation is 10–100x faster. Median of 5 runs on an M-series laptop:
+
+| | keygen | sign | verify |
+|---|--------|------|--------|
+| Hawk-256 | 0.09s | 0.007s | 0.02s |
+| Hawk-512 | 0.74s | 0.015s | 0.04s |
+| Hawk-1024 | 4.27s | 0.036s | 0.08s |
+
+Key generation dominates because it solves the NTRU equation; signing and verification are
+cheap. Hawk-1024 keygen is the one slow call.
+
 ## Parameters
 
 | Variant | n | Private key | Public key | Signature | Claimed level | Key recovery, claimed → after attack |
@@ -103,10 +117,10 @@ cost model in [docs/security-status.md](docs/security-status.md).
 pip install pytest && pytest
 ```
 
-Covers sign/verify round trips, spec-conformant encoded sizes, and rejection of tampered
-messages, wrong public keys, corrupted and truncated signatures, and random garbage. Hawk-256
-and Hawk-512 run by default (~30s); set `HAWK_TEST_SLOW=1` to include Hawk-1024, which takes
-several minutes to key-generate.
+Covers sign/verify round trips, spec-conformant encoded sizes, rejection of tampered
+messages, wrong public keys, corrupted and truncated signatures, and random garbage, plus
+regressions for the decoder bugs listed below. Hawk-256 and Hawk-512 run by default (~2s);
+set `HAWK_TEST_SLOW=1` to add Hawk-1024 (~7s total).
 
 ## Caveats
 
@@ -116,9 +130,11 @@ several minutes to key-generate.
   arithmetic in key generation, so it does not match the C reference implementation
   bit-for-bit. Upstream says as much. Hawk's isochronous-execution property is a property of
   the C code, not of this.
-- **Four correctness fixes were applied to the vendored code**, mostly NumPy 2 compatibility
-  — without them verification fails outright on current NumPy. All are listed in
-  [hawk_crypto/PATCHES.md](hawk_crypto/PATCHES.md).
+- **Six fixes were applied to the vendored code.** Two are NumPy 2 compatibility — without
+  them verification fails outright on current NumPy. Three are decoder bounds checks and
+  failure paths that crashed instead of rejecting. One replaces `(g ** b) % p` with
+  `pow(g, b, p)`, which made verification ~300x faster at Hawk-256. All are listed with
+  reproductions in [hawk_crypto/PATCHES.md](hawk_crypto/PATCHES.md).
 
 ## If you need a post-quantum signature
 

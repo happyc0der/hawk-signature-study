@@ -123,7 +123,7 @@ def rebuilds0(logn, q00, q01, w1, h0):
         - h0 : public polynomial (h0)
 
     Outputs:
-        - w0: recovered s0
+        - w0: recovered s0, or None (bottom) if reconstruction fails
     """
 
     n = 1 << logn
@@ -135,7 +135,7 @@ def rebuilds0(logn, q00, q01, w1, h0):
     w1fft = fft(w1scalled)
     z00 = q00.copy()
     if z00[0] < 0:
-        return False
+        return None
     z00[0] = 0
     q00fft = fft(np.array(z00, dtype=np.int32) * cq00)
     q01fft = fft(np.array(q01, dtype=np.int32) * cq01)
@@ -152,7 +152,7 @@ def rebuilds0(logn, q00, q01, w1, h0):
 
         v = alpha + q00fft[u]
         if v <= 0 or v >= 2**32 or x_re >= v * 2**32 or x_im >= v * 2**32:
-            return False
+            return None
 
         y_re = np.int32(x_re // v)
         y_im = np.int32(x_im // v)
@@ -166,7 +166,7 @@ def rebuilds0(logn, q00, q01, w1, h0):
         v = cs0 * np.int32(h0[u]) + np.int32(t[u])
         z = (v + cs0) // (2 * cs0)
         if z < -(2 ** PARAMS(logn, "highs0")) or z >= 2 ** (PARAMS(logn, "highs0")):
-            return False
+            return None
         w0[u] = np.int32(h0[u]) - 2 * z
 
     return w0

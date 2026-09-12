@@ -69,7 +69,9 @@ def get_roots(p, n):
     logn = int(math.log2(n))
     g0 = primitive_root(p)
     b = (p - 1) // (2 * n)
-    g0 = (g0**b) % p
+    # pow(g0, b, p) reduces as it goes. `(g0 ** b) % p` is the same value, but builds
+    # the exact power first -- ~130 million bits for the 2^31 verification primes.
+    g0 = pow(g0, b, p)
 
     zetas = compute_zetas(g0, p, logn)
     izetas = [pow(z, p - 2, p) for z in zetas]

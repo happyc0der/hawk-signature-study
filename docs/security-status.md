@@ -24,8 +24,10 @@ documents what changed.
 IACR ePrint 2026/1593** ([paper](https://eprint.iacr.org/2026/1593)).
 
 The result is an *unconditional, deterministic polynomial-time reduction* from Hawk-n key
-recovery over K_n = Q(ζ_2^ℓ) to poly(n) calls to an exact-SVP oracle in dimension **n/2 + 1**
-— roughly half the dimension the parameters were sized against.
+recovery over the cyclotomic field K_n = Q(ζ) — where ζ is a primitive 2^ℓ-th root of unity
+and n = 2^(ℓ−1), so Hawk-256/512/1024 are ℓ = 9/10/11 — to poly(n) calls to an exact-SVP
+oracle in dimension **n/2 + 1**, roughly half the dimension the parameters were sized
+against.
 
 The chain of ideas:
 

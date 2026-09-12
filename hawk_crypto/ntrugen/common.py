@@ -2,6 +2,10 @@
 
 
 """q is the integer modulus which is used in Falcon."""
+# NOTE: unused by Hawk, and not Hawk's modulus. This file is inherited from the
+# Falcon codebase that ntrugen was adapted from. Hawk solves fG - gF = 1, so the
+# relevant constant is `q = 1` in ntrugen_hawk.py. Kept only to stay diffable
+# against upstream; see ../PATCHES.md.
 q = 12 * 1024 + 1
 
 

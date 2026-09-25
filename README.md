@@ -14,6 +14,20 @@ It is published as an archive. The report and slides were submitted on 8 June 20
 weeks before the attack landed; they describe Hawk as a healthy NIST Round 3 candidate,
 which it was at the time. They are kept unedited, with the break documented separately.
 
+## Screenshots
+
+Taken from the demo server running locally (`python app.py`, then http://127.0.0.1:5050); every
+value on screen is real Hawk-512 output from the API.
+
+| | |
+|---|---|
+| ![Demo overview](docs/screenshots/demo-overview.png) | ![Key generation](docs/screenshots/demo-keygen.png) |
+| Overview page, as served by `app.py` | Key pair for `alice`: 184-byte private key, 1024-byte public key |
+| ![Signing a message](docs/screenshots/demo-sign.png) | ![Verifying a signature](docs/screenshots/demo-verify.png) |
+| Signing a message: 555-byte signature | Verifying it against the public key: valid |
+| ![Alice to Bob flow](docs/screenshots/demo-flow.png) | ![Talk title slide](docs/screenshots/presentation-title.png) |
+| Alice → Bob walkthrough: keygen, sign, transmit, verify | Title slide of the talk, `web/presentation.html` |
+
 ## What's here
 
 | Path | |
